@@ -476,13 +476,18 @@ class PullRequestWebviewProvider {
     }
 
     escapeHtml(text) {
-        if (!text) return '';
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
+        try {
+            if (!text) return '';
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        } catch (error) {
+            console.error('Failed to escape HTML:', error);
+            return '';
+        }
     }
 }
 
@@ -865,23 +870,34 @@ class IssueWebviewProvider {
     }
 
     escapeHtml(text) {
-        if (!text) return '';
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
+        try {
+            if (!text) return '';
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        } catch (error) {
+            console.error('Failed to escape HTML:', error);
+            return '';
+        }
     }
 
     getContrastColor(hexColor) {
-        if (!hexColor) return '#000000';
-        const hex = hexColor.replace('#', '');
-        const r = parseInt(hex.substr(0, 2), 16);
-        const g = parseInt(hex.substr(2, 2), 16);
-        const b = parseInt(hex.substr(4, 2), 16);
-        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-        return brightness > 155 ? '#000000' : '#ffffff';
+        try {
+            if (!hexColor) return '#000000';
+            const hex = hexColor.replace('#', '');
+            const r = parseInt(hex.substr(0, 2), 16);
+            const g = parseInt(hex.substr(2, 2), 16);
+            const b = parseInt(hex.substr(4, 2), 16);
+            if (isNaN(r) || isNaN(g) || isNaN(b)) return '#000000';
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            return brightness > 155 ? '#000000' : '#ffffff';
+        } catch (error) {
+            console.error('Failed to calculate contrast color:', error);
+            return '#000000';
+        }
     }
 
     async showCreateIssue(repositories) {
