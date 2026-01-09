@@ -13,35 +13,46 @@ class NotificationManager {
      * Start monitoring repositories for activity
      */
     async startMonitoring() {
-        if (this.isMonitoring) return;
+        try {
+            if (this.isMonitoring) return;
 
-        this.isMonitoring = true;
-        vscode.window.showInformationMessage('Repository monitoring started');
+            this.isMonitoring = true;
+            vscode.window.showInformationMessage('Repository monitoring started');
 
-        const config = vscode.workspace.getConfiguration('gitea');
-        this.pollInterval = config.get('notificationPollInterval') || 60000;
+            const config = vscode.workspace.getConfiguration('gitea');
+            this.pollInterval = config.get('notificationPollInterval') || 60000;
 
-        // Initial check
-        await this.checkRepositoriesActivity();
-
-        // Set up polling
-        this.monitoringTimers.main = setInterval(async () => {
+            // Initial check
             await this.checkRepositoriesActivity();
-        }, this.pollInterval);
+
+            // Set up polling
+            this.monitoringTimers.main = setInterval(async () => {
+                await this.checkRepositoriesActivity();
+            }, this.pollInterval);
+        } catch (error) {
+            console.error('Failed to start monitoring:', error);
+            this.isMonitoring = false;
+            vscode.window.showErrorMessage(`Failed to start repository monitoring: ${error.message}`);
+        }
     }
 
     /**
      * Stop monitoring repositories
      */
     stopMonitoring() {
-        if (!this.isMonitoring) return;
+        try {
+            if (!this.isMonitoring) return;
 
-        this.isMonitoring = false;
-        Object.keys(this.monitoringTimers).forEach(key => {
-            clearInterval(this.monitoringTimers[key]);
-        });
-        this.monitoringTimers = {};
-        vscode.window.showInformationMessage('Repository monitoring stopped');
+            this.isMonitoring = false;
+            Object.keys(this.monitoringTimers).forEach(key => {
+                clearInterval(this.monitoringTimers[key]);
+            });
+            this.monitoringTimers = {};
+            vscode.window.showInformationMessage('Repository monitoring stopped');
+        } catch (error) {
+            console.error('Failed to stop monitoring:', error);
+            // Don't show error to user as this is cleanup code
+        }
     }
 
     /**
@@ -177,59 +188,76 @@ class NotificationManager {
      * Show notification for new issues
      */
     notifyNewIssues(repo, issues) {
-        const count = issues.length;
-        const title = count === 1 ? 'New Issue' : `${count} New Issues`;
-        const message = `${title} in ${repo.full_name}`;
+        try {
+            const count = issues.length;
+            const title = count === 1 ? 'New Issue' : `${count} New Issues`;
+            const message = `${title} in ${repo.full_name}`;
 
-        vscode.window.showInformationMessage(
-            message,
-            'View',
-            'Dismiss'
-        ).then(selection => {
-            if (selection === 'View') {
-                vscode.commands.executeCommand('gitea.searchIssues', issues[0].title);
-            }
-        });
+            vscode.window.showInformationMessage(
+                message,
+                'View',
+                'Dismiss'
+            ).then(selection => {
+                if (selection === 'View') {
+                    vscode.commands.executeCommand('gitea.searchIssues', issues[0].title);
+                }
+            });
+        } catch (error) {
+            console.error('Failed to notify new issues:', error);
+        }
     }
 
     /**
      * Show notification for new pull requests
      */
     notifyNewPullRequests(repo, prs) {
-        const count = prs.length;
-        const title = count === 1 ? 'New Pull Request' : `${count} New Pull Requests`;
-        const message = `${title} in ${repo.full_name}`;
+        try {
+            const count = prs.length;
+            const title = count === 1 ? 'New Pull Request' : `${count} New Pull Requests`;
+            const message = `${title} in ${repo.full_name}`;
 
-        vscode.window.showInformationMessage(
-            message,
-            'View',
-            'Dismiss'
-        ).then(selection => {
-            if (selection === 'View') {
-                vscode.commands.executeCommand('gitea.searchPullRequests', prs[0].title);
-            }
-        });
+            vscode.window.showInformationMessage(
+                message,
+                'View',
+                'Dismiss'
+            ).then(selection => {
+                if (selection === 'View') {
+                    vscode.commands.executeCommand('gitea.searchPullRequests', prs[0].title);
+                }
+            });
+        } catch (error) {
+            console.error('Failed to notify new pull requests:', error);
+        }
     }
 
     /**
      * Show notification for new commits
      */
     notifyNewCommits(repo, commits) {
-        const count = commits.length;
-        const title = count === 1 ? 'New Commit' : `${count} New Commits`;
-        const message = `${title} in ${repo.full_name}`;
+        try {
+            const count = commits.length;
+            const title = count === 1 ? 'New Commit' : `${count} New Commits`;
+            const message = `${title} in ${repo.full_name}`;
 
-        vscode.window.showInformationMessage(message, 'Dismiss');
+            vscode.window.showInformationMessage(message, 'Dismiss');
+        } catch (error) {
+            console.error('Failed to notify new commits:', error);
+        }
     }
 
     /**
      * Toggle monitoring state
      */
     async toggleMonitoring() {
-        if (this.isMonitoring) {
-            this.stopMonitoring();
-        } else {
-            await this.startMonitoring();
+        try {
+            if (this.isMonitoring) {
+                this.stopMonitoring();
+            } else {
+                await this.startMonitoring();
+            }
+        } catch (error) {
+            console.error('Failed to toggle monitoring:', error);
+            vscode.window.showErrorMessage(`Failed to toggle monitoring: ${error.message}`);
         }
     }
 
@@ -237,10 +265,18 @@ class NotificationManager {
      * Get monitoring status
      */
     getStatus() {
-        return {
-            isMonitoring: this.isMonitoring,
-            pollInterval: this.pollInterval
-        };
+        try {
+            return {
+                isMonitoring: this.isMonitoring,
+                pollInterval: this.pollInterval
+            };
+        } catch (error) {
+            console.error('Failed to get status:', error);
+            return {
+                isMonitoring: false,
+                pollInterval: 60000
+            };
+        }
     }
 
     /**

@@ -12,15 +12,21 @@ class GiteaAuth {
      * Initialize authentication from VS Code settings
      */
     async initialize() {
-        const config = vscode.workspace.getConfiguration('gitea');
-        this.instanceUrl = config.get('instanceUrl');
-        this.authToken = config.get('authToken');
+        try {
+            const config = vscode.workspace.getConfiguration('gitea');
+            this.instanceUrl = config.get('instanceUrl');
+            this.authToken = config.get('authToken');
 
-        if (!this.instanceUrl || !this.authToken) {
+            if (!this.instanceUrl || !this.authToken) {
+                return false;
+            }
+
+            return await this.validateCredentials();
+        } catch (error) {
+            console.error('Failed to initialize authentication:', error);
+            vscode.window.showErrorMessage(`Failed to initialize Gitea authentication: ${error.message}`);
             return false;
         }
-
-        return await this.validateCredentials();
     }
 
     /**
@@ -44,47 +50,52 @@ class GiteaAuth {
      * Configure Gitea instance and authentication
      */
     async configure() {
-        // Get instance URL
-        const instanceUrl = await vscode.window.showInputBox({
-            prompt: 'Enter your Gitea instance URL',
-            placeHolder: 'https://gitea.example.com',
-            value: this.instanceUrl || '',
-            validateInput: (value) => {
-                if (!value) return 'Instance URL is required';
-                try {
-                    new URL(value);
-                    return null;
-                } catch {
-                    return 'Please enter a valid URL';
+        try {
+            // Get instance URL
+            const instanceUrl = await vscode.window.showInputBox({
+                prompt: 'Enter your Gitea instance URL',
+                placeHolder: 'https://gitea.example.com',
+                value: this.instanceUrl || '',
+                validateInput: (value) => {
+                    if (!value) return 'Instance URL is required';
+                    try {
+                        new URL(value);
+                        return null;
+                    } catch {
+                        return 'Please enter a valid URL';
+                    }
                 }
-            }
-        });
+            });
 
-        if (!instanceUrl) return;
+            if (!instanceUrl) return;
 
-        // Get auth token
-        const authToken = await vscode.window.showInputBox({
-            prompt: 'Enter your Personal Access Token',
-            placeHolder: 'Your Gitea Personal Access Token',
-            password: true,
-            validateInput: (value) => {
-                if (!value) return 'Token is required';
-                return null;
-            }
-        });
+            // Get auth token
+            const authToken = await vscode.window.showInputBox({
+                prompt: 'Enter your Personal Access Token',
+                placeHolder: 'Your Gitea Personal Access Token',
+                password: true,
+                validateInput: (value) => {
+                    if (!value) return 'Token is required';
+                    return null;
+                }
+            });
 
-        if (!authToken) return;
+            if (!authToken) return;
 
-        // Save to settings
-        const config = vscode.workspace.getConfiguration('gitea');
-        await config.update('instanceUrl', instanceUrl, vscode.ConfigurationTarget.Global);
-        await config.update('authToken', authToken, vscode.ConfigurationTarget.Global);
+            // Save to settings
+            const config = vscode.workspace.getConfiguration('gitea');
+            await config.update('instanceUrl', instanceUrl, vscode.ConfigurationTarget.Global);
+            await config.update('authToken', authToken, vscode.ConfigurationTarget.Global);
 
-        this.instanceUrl = instanceUrl;
-        this.authToken = authToken;
+            this.instanceUrl = instanceUrl;
+            this.authToken = authToken;
 
-        // Validate
-        await this.validateCredentials();
+            // Validate
+            await this.validateCredentials();
+        } catch (error) {
+            console.error('Failed to configure Gitea:', error);
+            vscode.window.showErrorMessage(`Failed to configure Gitea: ${error.message}`);
+        }
     }
 
     /**
