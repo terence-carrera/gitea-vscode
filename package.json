@@ -2,8 +2,9 @@
     "name": "gitea",
     "displayName": "Gitea",
     "description": "Unofficial Gitea Extension for VS Code",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "publisher": "TerenceCarrera",
+    "license": "MIT",
     "repository": {
         "url": "https://github.com/terence-carrera/gitea-vscode"
     },
@@ -220,6 +221,11 @@
                     "default": 60000,
                     "description": "Poll interval for notifications in milliseconds (minimum 30000 - 30 seconds)",
                     "minimum": 30000
+                },
+                "gitea.defaultRepoStartingPath": {
+                    "type": "string",
+                    "default": "c:\\Users\\Terence\\source\\repos",
+                    "description": "Default starting path for repository operations"
                 }
             }
         }
