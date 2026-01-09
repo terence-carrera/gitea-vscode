@@ -1,0 +1,236 @@
+{
+    "name": "gitea",
+    "displayName": "Gitea",
+    "description": "Unofficial Gitea Extension for VS Code",
+    "version": "0.1.0",
+    "engines": {
+        "vscode": "^1.100.0"
+    },
+    "categories": [
+        "SCM Providers"
+    ],
+    "activationEvents": [
+        "onStartupFinished"
+    ],
+    "main": "./extension.js",
+    "icon": "media/gitea-logo-marketplace.png",
+    "contributes": {
+        "commands": [
+            {
+                "command": "gitea.configure",
+                "title": "Gitea: Configure Instance",
+                "icon": "$(gear)"
+            },
+            {
+                "command": "gitea.searchRepositories",
+                "title": "Gitea: Search Repositories",
+                "icon": "$(search)"
+            },
+            {
+                "command": "gitea.searchIssues",
+                "title": "Gitea: Search Issues",
+                "icon": "$(search)"
+            },
+            {
+                "command": "gitea.searchPullRequests",
+                "title": "Gitea: Search Pull Requests",
+                "icon": "$(search)"
+            },
+            {
+                "command": "gitea.refreshRepositories",
+                "title": "Refresh Repositories",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "gitea.toggleNotifications",
+                "title": "Gitea: Toggle Notifications",
+                "icon": "$(bell)"
+            },
+            {
+                "command": "gitea.notificationStatus",
+                "title": "Gitea: Check Notification Status",
+                "icon": "$(info)"
+            },
+            {
+                "command": "gitea.createRepository",
+                "title": "Gitea: Create Repository",
+                "icon": "$(new-folder)"
+            },
+            {
+                "command": "gitea.createIssue",
+                "title": "Gitea: Create Issue",
+                "icon": "$(new-file)"
+            },
+            {
+                "command": "gitea.createPullRequest",
+                "title": "Gitea: Create Pull Request",
+                "icon": "$(git-pull-request-create)"
+            },
+            {
+                "command": "gitea.openRepository",
+                "title": "Open Repository in VS Code",
+                "icon": "$(folder-opened)"
+            },
+            {
+                "command": "gitea.openInBrowser",
+                "title": "Open in Browser",
+                "icon": "$(globe)"
+            },
+            {
+                "command": "gitea.openIssueInBrowser",
+                "title": "Open Issue in Browser",
+                "icon": "$(globe)"
+            },
+            {
+                "command": "gitea.openPullRequestInBrowser",
+                "title": "Open Pull Request in Browser",
+                "icon": "$(globe)"
+            },
+            {
+                "command": "gitea.viewIssueDetails",
+                "title": "View Issue Details",
+                "icon": "$(eye)"
+            },
+            {
+                "command": "gitea.viewPullRequestDetails",
+                "title": "View Pull Request Details",
+                "icon": "$(eye)"
+            }
+        ],
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "gitea-explorer",
+                    "title": "Gitea",
+                    "icon": "media/gitea-logo.svg"
+                }
+            ]
+        },
+        "views": {
+            "gitea-explorer": [
+                {
+                    "id": "gitea.repositories",
+                    "name": "Repositories"
+                },
+                {
+                    "id": "gitea.issues",
+                    "name": "Issues"
+                },
+                {
+                    "id": "gitea.pullRequests",
+                    "name": "Pull Requests"
+                }
+            ]
+        },
+        "menus": {
+            "view/title": [
+                {
+                    "command": "gitea.refreshRepositories",
+                    "when": "view == gitea.repositories || view == gitea.issues || view == gitea.pullRequests",
+                    "group": "navigation"
+                },
+                {
+                    "command": "gitea.searchRepositories",
+                    "when": "view == gitea.repositories",
+                    "group": "navigation"
+                },
+                {
+                    "command": "gitea.searchIssues",
+                    "when": "view == gitea.issues",
+                    "group": "navigation"
+                },
+                {
+                    "command": "gitea.searchPullRequests",
+                    "when": "view == gitea.pullRequests",
+                    "group": "navigation"
+                },
+                {
+                    "command": "gitea.createRepository",
+                    "when": "view == gitea.repositories",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "gitea.createIssue",
+                    "when": "view == gitea.issues",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "gitea.createPullRequest",
+                    "when": "view == gitea.pullRequests",
+                    "group": "navigation@2"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "gitea.openRepository",
+                    "when": "view == gitea.repositories && viewItem == repository",
+                    "group": "inline"
+                },
+                {
+                    "command": "gitea.openInBrowser",
+                    "when": "view == gitea.repositories && viewItem == repository",
+                    "group": "inline"
+                },
+                {
+                    "command": "gitea.openIssueInBrowser",
+                    "when": "view == gitea.issues && viewItem == issue",
+                    "group": "inline"
+                },
+                {
+                    "command": "gitea.viewIssueDetails",
+                    "when": "view == gitea.issues && viewItem == issue",
+                    "group": "inline"
+                },
+                {
+                    "command": "gitea.openPullRequestInBrowser",
+                    "when": "view == gitea.pullRequests && viewItem == pullRequest",
+                    "group": "inline"
+                },
+                {
+                    "command": "gitea.viewPullRequestDetails",
+                    "when": "view == gitea.pullRequests && viewItem == pullRequest",
+                    "group": "inline"
+                }
+            ]
+        },
+        "configuration": {
+            "title": "Gitea",
+            "properties": {
+                "gitea.instanceUrl": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Your Gitea instance URL (e.g., https://gitea.example.com)"
+                },
+                "gitea.authToken": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Personal Access Token for Gitea API authentication"
+                },
+                "gitea.enableNotifications": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable notifications for repository activities"
+                },
+                "gitea.notificationPollInterval": {
+                    "type": "number",
+                    "default": 60000,
+                    "description": "Poll interval for notifications in milliseconds (minimum 30000 - 30 seconds)",
+                    "minimum": 30000
+                }
+            }
+        }
+    },
+    "scripts": {
+        "lint": "eslint .",
+        "pretest": "npm run lint",
+        "test": "vscode-test"
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.108.0",
+        "@types/mocha": "^10.0.10",
+        "@types/node": "22.x",
+        "eslint": "^9.39.1",
+        "@vscode/test-cli": "^0.0.12",
+        "@vscode/test-electron": "^2.5.2"
+    }
+}
