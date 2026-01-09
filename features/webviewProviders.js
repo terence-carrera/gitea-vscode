@@ -476,18 +476,13 @@ class PullRequestWebviewProvider {
     }
 
     escapeHtml(text) {
-        try {
-            if (!text) return '';
-            return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        } catch (error) {
-            console.error('Failed to escape HTML:', error);
-            return '';
-        }
+        if (!text) return '';
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 }
 
@@ -870,27 +865,22 @@ class IssueWebviewProvider {
     }
 
     escapeHtml(text) {
-        try {
-            if (!text) return '';
-            return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        } catch (error) {
-            console.error('Failed to escape HTML:', error);
-            return '';
-        }
+        if (!text) return '';
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
     getContrastColor(hexColor) {
         try {
             if (!hexColor) return '#000000';
             const hex = hexColor.replace('#', '');
-            const r = parseInt(hex.substr(0, 2), 16);
-            const g = parseInt(hex.substr(2, 2), 16);
-            const b = parseInt(hex.substr(4, 2), 16);
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
             if (isNaN(r) || isNaN(g) || isNaN(b)) return '#000000';
             const brightness = (r * 299 + g * 587 + b * 114) / 1000;
             return brightness > 155 ? '#000000' : '#ffffff';

@@ -265,18 +265,10 @@ class NotificationManager {
      * Get monitoring status
      */
     getStatus() {
-        try {
-            return {
-                isMonitoring: this.isMonitoring,
-                pollInterval: this.pollInterval
-            };
-        } catch (error) {
-            console.error('Failed to get status:', error);
-            return {
-                isMonitoring: false,
-                pollInterval: 60000
-            };
-        }
+        return {
+            isMonitoring: this.isMonitoring,
+            pollInterval: this.pollInterval
+        };
     }
 
     /**
