@@ -3,8 +3,12 @@
     "displayName": "Gitea",
     "description": "Unofficial Gitea Extension for VS Code",
     "version": "0.1.0",
+    "publisher": "TerenceCarrera",
+    "repository": {
+        "url": "https://github.com/terence-carrera/gitea-vscode"
+    },
     "engines": {
-        "vscode": "^1.100.0"
+        "vscode": "^1.108.0"
     },
     "categories": [
         "SCM Providers"
