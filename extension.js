@@ -9,24 +9,25 @@ const NotificationManager = require('./features/notifications');
  * @param {vscode.ExtensionContext} context
  */
 async function activate(context) {
-    console.log('Gitea Extension is Now Active!');
+    try {
+        console.log('Gitea Extension is Now Active!');
 
-    // Initialize authentication
-    const auth = new GiteaAuth();
-    await auth.initialize();
+        // Initialize authentication
+        const auth = new GiteaAuth();
+        await auth.initialize();
 
-    // Initialize tree providers
-    const repositoryProvider = new RepositoryProvider(auth);
-    const issueProvider = new IssueProvider(auth);
-    const pullRequestProvider = new PullRequestProvider(auth);
+        // Initialize tree providers
+        const repositoryProvider = new RepositoryProvider(auth);
+        const issueProvider = new IssueProvider(auth);
+        const pullRequestProvider = new PullRequestProvider(auth);
 
-    // Initialize webview providers
-    const prWebviewProvider = new PullRequestWebviewProvider(auth);
-    const issueWebviewProvider = new IssueWebviewProvider(auth);
-    const prCreationProvider = new PullRequestCreationProvider(auth);
+        // Initialize webview providers
+        const prWebviewProvider = new PullRequestWebviewProvider(auth);
+        const issueWebviewProvider = new IssueWebviewProvider(auth);
+        const prCreationProvider = new PullRequestCreationProvider(auth);
 
-    // Initialize notification manager
-    const notificationManager = new NotificationManager(auth);
+        // Initialize notification manager
+        const notificationManager = new NotificationManager(auth);
 
     // Register tree views
     const repositoryTreeView = vscode.window.createTreeView('gitea.repositories', {
@@ -48,107 +49,142 @@ async function activate(context) {
 
     // Configuration command
     const configureCommand = vscode.commands.registerCommand('gitea.configure', async () => {
-        await auth.configure();
-        repositoryProvider.refresh();
-        issueProvider.refresh();
-        pullRequestProvider.refresh();
+        try {
+            await auth.configure();
+            repositoryProvider.refresh();
+            issueProvider.refresh();
+            pullRequestProvider.refresh();
+        } catch (error) {
+            console.error('Failed to configure Gitea:', error);
+            vscode.window.showErrorMessage(`Failed to configure Gitea: ${error.message}`);
+        }
     });
 
     // Search repositories command
     const searchRepositoriesCommand = vscode.commands.registerCommand('gitea.searchRepositories', async () => {
-        if (!auth.isConfigured()) {
-            const result = await vscode.window.showWarningMessage(
-                'Gitea is not configured. Would you like to configure it now?',
-                'Configure', 'Cancel'
-            );
-            if (result === 'Configure') {
-                await vscode.commands.executeCommand('gitea.configure');
+        try {
+            if (!auth.isConfigured()) {
+                const result = await vscode.window.showWarningMessage(
+                    'Gitea is not configured. Would you like to configure it now?',
+                    'Configure', 'Cancel'
+                );
+                if (result === 'Configure') {
+                    await vscode.commands.executeCommand('gitea.configure');
+                }
+                return;
             }
-            return;
-        }
 
-        const query = await vscode.window.showInputBox({
-            prompt: 'Search repositories',
-            placeHolder: 'Enter search query...'
-        });
+            const query = await vscode.window.showInputBox({
+                prompt: 'Search repositories',
+                placeHolder: 'Enter search query...'
+            });
 
-        if (query) {
-            await repositoryProvider.searchRepositories(query);
+            if (query) {
+                await repositoryProvider.searchRepositories(query);
+            }
+        } catch (error) {
+            console.error('Failed to search repositories:', error);
+            vscode.window.showErrorMessage(`Failed to search repositories: ${error.message}`);
         }
     });
 
     // Search issues command
     const searchIssuesCommand = vscode.commands.registerCommand('gitea.searchIssues', async () => {
-        if (!auth.isConfigured()) {
-            const result = await vscode.window.showWarningMessage(
-                'Gitea is not configured. Would you like to configure it now?',
-                'Configure', 'Cancel'
-            );
-            if (result === 'Configure') {
-                await vscode.commands.executeCommand('gitea.configure');
+        try {
+            if (!auth.isConfigured()) {
+                const result = await vscode.window.showWarningMessage(
+                    'Gitea is not configured. Would you like to configure it now?',
+                    'Configure', 'Cancel'
+                );
+                if (result === 'Configure') {
+                    await vscode.commands.executeCommand('gitea.configure');
+                }
+                return;
             }
-            return;
-        }
 
-        const query = await vscode.window.showInputBox({
-            prompt: 'Search issues',
-            placeHolder: 'Enter search query...'
-        });
+            const query = await vscode.window.showInputBox({
+                prompt: 'Search issues',
+                placeHolder: 'Enter search query...'
+            });
 
-        if (query) {
-            await issueProvider.searchIssues(query);
+            if (query) {
+                await issueProvider.searchIssues(query);
+            }
+        } catch (error) {
+            console.error('Failed to search issues:', error);
+            vscode.window.showErrorMessage(`Failed to search issues: ${error.message}`);
         }
     });
 
     // Search pull requests command
     const searchPullRequestsCommand = vscode.commands.registerCommand('gitea.searchPullRequests', async () => {
-        if (!auth.isConfigured()) {
-            const result = await vscode.window.showWarningMessage(
-                'Gitea is not configured. Would you like to configure it now?',
-                'Configure', 'Cancel'
-            );
-            if (result === 'Configure') {
-                await vscode.commands.executeCommand('gitea.configure');
+        try {
+            if (!auth.isConfigured()) {
+                const result = await vscode.window.showWarningMessage(
+                    'Gitea is not configured. Would you like to configure it now?',
+                    'Configure', 'Cancel'
+                );
+                if (result === 'Configure') {
+                    await vscode.commands.executeCommand('gitea.configure');
+                }
+                return;
             }
-            return;
-        }
 
-        const query = await vscode.window.showInputBox({
-            prompt: 'Search pull requests',
-            placeHolder: 'Enter search query...'
-        });
+            const query = await vscode.window.showInputBox({
+                prompt: 'Search pull requests',
+                placeHolder: 'Enter search query...'
+            });
 
-        if (query) {
-            await pullRequestProvider.searchPullRequests(query);
+            if (query) {
+                await pullRequestProvider.searchPullRequests(query);
+            }
+        } catch (error) {
+            console.error('Failed to search pull requests:', error);
+            vscode.window.showErrorMessage(`Failed to search pull requests: ${error.message}`);
         }
     });
 
     // Refresh repositories command
     const refreshRepositoriesCommand = vscode.commands.registerCommand('gitea.refreshRepositories', () => {
-        repositoryProvider.resetSearch();
-        issueProvider.resetSearch();
-        pullRequestProvider.resetSearch();
-        repositoryProvider.refresh();
-        issueProvider.refresh();
-        pullRequestProvider.refresh();
+        try {
+            repositoryProvider.resetSearch();
+            issueProvider.resetSearch();
+            pullRequestProvider.resetSearch();
+            repositoryProvider.refresh();
+            issueProvider.refresh();
+            pullRequestProvider.refresh();
+        } catch (error) {
+            console.error('Failed to refresh repositories:', error);
+            vscode.window.showErrorMessage(`Failed to refresh: ${error.message}`);
+        }
     });
 
     // Notification monitoring command
     const toggleNotificationsCommand = vscode.commands.registerCommand('gitea.toggleNotifications', async () => {
-        if (!auth.isConfigured()) {
-            vscode.window.showWarningMessage('Gitea is not configured. Please configure first.');
-            return;
+        try {
+            if (!auth.isConfigured()) {
+                vscode.window.showWarningMessage('Gitea is not configured. Please configure first.');
+                return;
+            }
+            await notificationManager.toggleMonitoring();
+        } catch (error) {
+            console.error('Failed to toggle notifications:', error);
+            vscode.window.showErrorMessage(`Failed to toggle notifications: ${error.message}`);
         }
-        await notificationManager.toggleMonitoring();
     });
 
     // Get notification status command
     const notificationStatusCommand = vscode.commands.registerCommand('gitea.notificationStatus', () => {
-        const status = notificationManager.getStatus();
-        const message = status.isMonitoring
-            ? `Notifications enabled (polling every ${status.pollInterval / 1000}s)`
-            : 'Notifications disabled';
-        vscode.window.showInformationMessage(message);
+        try {
+            const status = notificationManager.getStatus();
+            const message = status.isMonitoring
+                ? `Notifications enabled (polling every ${status.pollInterval / 1000}s)`
+                : 'Notifications disabled';
+            vscode.window.showInformationMessage(message);
+        } catch (error) {
+            console.error('Failed to get notification status:', error);
+            vscode.window.showErrorMessage(`Failed to get notification status: ${error.message}`);
+        }
     });
 
     // Legacy hello world command
@@ -415,15 +451,25 @@ async function activate(context) {
 
     // View Issue Details command
     const viewIssueDetailsCommand = vscode.commands.registerCommand('gitea.viewIssueDetails', async (treeItem) => {
-        if (treeItem && treeItem.metadata) {
-            await issueWebviewProvider.showIssue(treeItem.metadata.number, treeItem.metadata.repository);
+        try {
+            if (treeItem && treeItem.metadata) {
+                await issueWebviewProvider.showIssue(treeItem.metadata.number, treeItem.metadata.repository);
+            }
+        } catch (error) {
+            console.error('Failed to view issue details:', error);
+            vscode.window.showErrorMessage(`Failed to view issue details: ${error.message}`);
         }
     });
 
     // View Pull Request Details command
     const viewPullRequestDetailsCommand = vscode.commands.registerCommand('gitea.viewPullRequestDetails', async (treeItem) => {
-        if (treeItem && treeItem.metadata) {
-            await prWebviewProvider.showPullRequest(treeItem.metadata.number, treeItem.metadata.repository);
+        try {
+            if (treeItem && treeItem.metadata) {
+                await prWebviewProvider.showPullRequest(treeItem.metadata.number, treeItem.metadata.repository);
+            }
+        } catch (error) {
+            console.error('Failed to view pull request details:', error);
+            vscode.window.showErrorMessage(`Failed to view pull request details: ${error.message}`);
         }
     });
 
@@ -435,28 +481,41 @@ async function activate(context) {
 
     // Auto-start notifications if enabled
     if (auth.isConfigured()) {
-        const config = vscode.workspace.getConfiguration('gitea');
-        if (config.get('enableNotifications')) {
-            await notificationManager.startMonitoring();
+        try {
+            const config = vscode.workspace.getConfiguration('gitea');
+            if (config.get('enableNotifications')) {
+                await notificationManager.startMonitoring();
+            }
+        } catch (error) {
+            console.error('Failed to start notifications:', error);
+            // Don't show error to user as this is an optional feature
         }
     }
 
     // Stop notifications on deactivation
     context.subscriptions.push(
         new vscode.Disposable(() => {
-            notificationManager.stopMonitoring();
+            try {
+                notificationManager.stopMonitoring();
+            } catch (error) {
+                console.error('Failed to stop notifications:', error);
+            }
         })
     );
 
-    // Show welcome message if not configured
-    if (!auth.isConfigured()) {
-        const result = await vscode.window.showInformationMessage(
-            'Welcome to Gitea! Configure your instance to get started.',
-            'Configure Now', 'Later'
-        );
-        if (result === 'Configure Now') {
-            await vscode.commands.executeCommand('gitea.configure');
+        // Show welcome message if not configured
+        if (!auth.isConfigured()) {
+            const result = await vscode.window.showInformationMessage(
+                'Welcome to Gitea! Configure your instance to get started.',
+                'Configure Now', 'Later'
+            );
+            if (result === 'Configure Now') {
+                await vscode.commands.executeCommand('gitea.configure');
+            }
         }
+    } catch (error) {
+        console.error('Failed to activate Gitea extension:', error);
+        vscode.window.showErrorMessage(`Failed to activate Gitea extension: ${error.message}`);
     }
 }
 

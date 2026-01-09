@@ -7,71 +7,81 @@ class PullRequestWebviewProvider {
     }
 
     async showPullRequest(prNumber, repository) {
-        const panelKey = `${repository}#${prNumber}`;
-
-        // Reuse existing panel if available
-        if (this._panels.has(panelKey)) {
-            const panel = this._panels.get(panelKey);
-            panel.reveal(vscode.ViewColumn.One);
-            return;
-        }
-
-        // Fetch PR details
-        const [owner, repo] = repository.split('/');
-        let prDetails, comments, reviews;
-
         try {
-            [prDetails, comments, reviews] = await Promise.all([
-                this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}`),
-                this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/issues/${prNumber}/comments`),
-                this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}/reviews`).catch(() => [])
-            ]);
-        } catch (error) {
-            vscode.window.showErrorMessage(`Failed to load PR #${prNumber}: ${error.message}`);
-            return;
-        }
+            const panelKey = `${repository}#${prNumber}`;
 
-        // Create panel
-        const panel = vscode.window.createWebviewPanel(
-            'giteaPullRequest',
-            `PR #${prNumber}: ${prDetails.title}`,
-            vscode.ViewColumn.One,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true
+            // Reuse existing panel if available
+            if (this._panels.has(panelKey)) {
+                const panel = this._panels.get(panelKey);
+                panel.reveal(vscode.ViewColumn.One);
+                return;
             }
-        );
 
-        this._panels.set(panelKey, panel);
+            // Fetch PR details
+            const [owner, repo] = repository.split('/');
+            let prDetails, comments, reviews;
 
-        panel.onDidDispose(() => {
-            this._panels.delete(panelKey);
-        });
+            try {
+                [prDetails, comments, reviews] = await Promise.all([
+                    this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}`),
+                    this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/issues/${prNumber}/comments`),
+                    this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}/reviews`).catch(() => [])
+                ]);
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to load PR #${prNumber}: ${error.message}`);
+                return;
+            }
 
-        // Handle messages from webview
-        panel.webview.onDidReceiveMessage(
-            async message => {
-                switch (message.command) {
-                    case 'addComment':
-                        await this.addComment(owner, repo, prNumber, message.body);
-                        break;
-                    case 'addReview':
-                        await this.addReview(owner, repo, prNumber, message.body, message.event);
-                        break;
-                    case 'mergePR':
-                        await this.mergePullRequest(owner, repo, prNumber, message.mergeMethod);
-                        break;
-                    case 'closePR':
-                        await this.closePullRequest(owner, repo, prNumber);
-                        break;
-                    case 'openInBrowser':
-                        vscode.env.openExternal(vscode.Uri.parse(prDetails.html_url));
-                        break;
+            // Create panel
+            const panel = vscode.window.createWebviewPanel(
+                'giteaPullRequest',
+                `PR #${prNumber}: ${prDetails.title}`,
+                vscode.ViewColumn.One,
+                {
+                    enableScripts: true,
+                    retainContextWhenHidden: true
                 }
-            }
-        );
+            );
 
-        panel.webview.html = this.getPullRequestHtml(panel.webview, prDetails, comments, reviews);
+            this._panels.set(panelKey, panel);
+
+            panel.onDidDispose(() => {
+                this._panels.delete(panelKey);
+            });
+
+            // Handle messages from webview
+            panel.webview.onDidReceiveMessage(
+                async message => {
+                    try {
+                        switch (message.command) {
+                            case 'addComment':
+                                await this.addComment(owner, repo, prNumber, message.body);
+                                break;
+                            case 'addReview':
+                                await this.addReview(owner, repo, prNumber, message.body, message.event);
+                                break;
+                            case 'mergePR':
+                                await this.mergePullRequest(owner, repo, prNumber, message.mergeMethod);
+                                break;
+                            case 'closePR':
+                                await this.closePullRequest(owner, repo, prNumber);
+                                break;
+                            case 'openInBrowser':
+                                vscode.env.openExternal(vscode.Uri.parse(prDetails.html_url));
+                                break;
+                        }
+                    } catch (error) {
+                        console.error('Error handling webview message:', error);
+                        vscode.window.showErrorMessage(`Error: ${error.message}`);
+                    }
+                }
+            );
+
+            panel.webview.html = this.getPullRequestHtml(panel.webview, prDetails, comments, reviews);
+        } catch (error) {
+            console.error('Failed to show pull request:', error);
+            vscode.window.showErrorMessage(`Failed to show pull request: ${error.message}`);
+        }
     }
 
     async addComment(owner, repo, prNumber, body) {
@@ -483,65 +493,75 @@ class IssueWebviewProvider {
     }
 
     async showIssue(issueNumber, repository) {
-        const panelKey = `${repository}#${issueNumber}`;
-
-        if (this._panels.has(panelKey)) {
-            const panel = this._panels.get(panelKey);
-            panel.reveal(vscode.ViewColumn.One);
-            return;
-        }
-
-        const [owner, repo] = repository.split('/');
-        let issueDetails, comments;
-
         try {
-            [issueDetails, comments] = await Promise.all([
-                this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/issues/${issueNumber}`),
-                this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/issues/${issueNumber}/comments`)
-            ]);
-        } catch (error) {
-            vscode.window.showErrorMessage(`Failed to load Issue #${issueNumber}: ${error.message}`);
-            return;
-        }
+            const panelKey = `${repository}#${issueNumber}`;
 
-        const panel = vscode.window.createWebviewPanel(
-            'giteaIssue',
-            `Issue #${issueNumber}: ${issueDetails.title}`,
-            vscode.ViewColumn.One,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true
+            if (this._panels.has(panelKey)) {
+                const panel = this._panels.get(panelKey);
+                panel.reveal(vscode.ViewColumn.One);
+                return;
             }
-        );
 
-        this._panels.set(panelKey, panel);
+            const [owner, repo] = repository.split('/');
+            let issueDetails, comments;
 
-        panel.onDidDispose(() => {
-            this._panels.delete(panelKey);
-        });
+            try {
+                [issueDetails, comments] = await Promise.all([
+                    this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/issues/${issueNumber}`),
+                    this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/issues/${issueNumber}/comments`)
+                ]);
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to load Issue #${issueNumber}: ${error.message}`);
+                return;
+            }
 
-        panel.webview.onDidReceiveMessage(
-            async message => {
-                switch (message.command) {
-                    case 'addComment':
-                        await this.addComment(owner, repo, issueNumber, message.body);
-                        break;
-                    case 'closeIssue':
-                        await this.closeIssue(owner, repo, issueNumber);
-                        panel.dispose();
-                        break;
-                    case 'reopenIssue':
-                        await this.reopenIssue(owner, repo, issueNumber);
-                        panel.dispose();
-                        break;
-                    case 'openInBrowser':
-                        vscode.env.openExternal(vscode.Uri.parse(issueDetails.html_url));
-                        break;
+            const panel = vscode.window.createWebviewPanel(
+                'giteaIssue',
+                `Issue #${issueNumber}: ${issueDetails.title}`,
+                vscode.ViewColumn.One,
+                {
+                    enableScripts: true,
+                    retainContextWhenHidden: true
                 }
-            }
-        );
+            );
 
-        panel.webview.html = this.getIssueHtml(panel.webview, issueDetails, comments);
+            this._panels.set(panelKey, panel);
+
+            panel.onDidDispose(() => {
+                this._panels.delete(panelKey);
+            });
+
+            panel.webview.onDidReceiveMessage(
+                async message => {
+                    try {
+                        switch (message.command) {
+                            case 'addComment':
+                                await this.addComment(owner, repo, issueNumber, message.body);
+                                break;
+                            case 'closeIssue':
+                                await this.closeIssue(owner, repo, issueNumber);
+                                panel.dispose();
+                                break;
+                            case 'reopenIssue':
+                                await this.reopenIssue(owner, repo, issueNumber);
+                                panel.dispose();
+                                break;
+                            case 'openInBrowser':
+                                vscode.env.openExternal(vscode.Uri.parse(issueDetails.html_url));
+                                break;
+                        }
+                    } catch (error) {
+                        console.error('Error handling webview message:', error);
+                        vscode.window.showErrorMessage(`Error: ${error.message}`);
+                    }
+                }
+            );
+
+            panel.webview.html = this.getIssueHtml(panel.webview, issueDetails, comments);
+        } catch (error) {
+            console.error('Failed to show issue:', error);
+            vscode.window.showErrorMessage(`Failed to show issue: ${error.message}`);
+        }
     }
 
     async addComment(owner, repo, issueNumber, body) {
@@ -855,40 +875,56 @@ class IssueWebviewProvider {
     }
 
     getContrastColor(hexColor) {
-        if (!hexColor) return '#000000';
-        const hex = hexColor.replace('#', '');
-        const r = parseInt(hex.substr(0, 2), 16);
-        const g = parseInt(hex.substr(2, 2), 16);
-        const b = parseInt(hex.substr(4, 2), 16);
-        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-        return brightness > 155 ? '#000000' : '#ffffff';
+        try {
+            if (!hexColor) return '#000000';
+            const hex = hexColor.replace('#', '');
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
+            if (isNaN(r) || isNaN(g) || isNaN(b)) return '#000000';
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            return brightness > 155 ? '#000000' : '#ffffff';
+        } catch (error) {
+            console.error('Failed to calculate contrast color:', error);
+            return '#000000';
+        }
     }
 
     async showCreateIssue(repositories) {
-        const panel = vscode.window.createWebviewPanel(
-            'giteaCreateIssue',
-            'Create New Issue',
-            vscode.ViewColumn.One,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true
-            }
-        );
+        try {
+            const panel = vscode.window.createWebviewPanel(
+                'giteaCreateIssue',
+                'Create New Issue',
+                vscode.ViewColumn.One,
+                {
+                    enableScripts: true,
+                    retainContextWhenHidden: true
+                }
+            );
 
-        panel.webview.onDidReceiveMessage(async message => {
-            switch (message.command) {
-                case 'loadBranches':
-                    const branches = await this.loadBranches(message.repository);
-                    panel.webview.postMessage({ command: 'branchesLoaded', branches });
-                    break;
-                case 'createIssue':
-                    await this.createIssue(message.data);
-                    panel.dispose();
-                    break;
-            }
-        });
+            panel.webview.onDidReceiveMessage(async message => {
+                try {
+                    switch (message.command) {
+                        case 'loadBranches':
+                            const branches = await this.loadBranches(message.repository);
+                            panel.webview.postMessage({ command: 'branchesLoaded', branches });
+                            break;
+                        case 'createIssue':
+                            await this.createIssue(message.data);
+                            panel.dispose();
+                            break;
+                    }
+                } catch (error) {
+                    console.error('Error handling webview message:', error);
+                    vscode.window.showErrorMessage(`Error: ${error.message}`);
+                }
+            });
 
-        panel.webview.html = this.getCreateIssueHtml(panel.webview, repositories);
+            panel.webview.html = this.getCreateIssueHtml(panel.webview, repositories);
+        } catch (error) {
+            console.error('Failed to show create issue form:', error);
+            vscode.window.showErrorMessage(`Failed to show create issue form: ${error.message}`);
+        }
     }
 
     async loadBranches(repository) {
@@ -1106,30 +1142,40 @@ class PullRequestCreationProvider {
     }
 
     async showCreatePullRequest(repositories) {
-        const panel = vscode.window.createWebviewPanel(
-            'giteaCreatePR',
-            'Create New Pull Request',
-            vscode.ViewColumn.One,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true
-            }
-        );
+        try {
+            const panel = vscode.window.createWebviewPanel(
+                'giteaCreatePR',
+                'Create New Pull Request',
+                vscode.ViewColumn.One,
+                {
+                    enableScripts: true,
+                    retainContextWhenHidden: true
+                }
+            );
 
-        panel.webview.onDidReceiveMessage(async message => {
-            switch (message.command) {
-                case 'loadBranches':
-                    const branches = await this.loadBranches(message.repository);
-                    panel.webview.postMessage({ command: 'branchesLoaded', branches });
-                    break;
-                case 'createPR':
-                    await this.createPullRequest(message.data);
-                    panel.dispose();
-                    break;
-            }
-        });
+            panel.webview.onDidReceiveMessage(async message => {
+                try {
+                    switch (message.command) {
+                        case 'loadBranches':
+                            const branches = await this.loadBranches(message.repository);
+                            panel.webview.postMessage({ command: 'branchesLoaded', branches });
+                            break;
+                        case 'createPR':
+                            await this.createPullRequest(message.data);
+                            panel.dispose();
+                            break;
+                    }
+                } catch (error) {
+                    console.error('Error handling webview message:', error);
+                    vscode.window.showErrorMessage(`Error: ${error.message}`);
+                }
+            });
 
-        panel.webview.html = this.getCreatePRHtml(panel.webview, repositories);
+            panel.webview.html = this.getCreatePRHtml(panel.webview, repositories);
+        } catch (error) {
+            console.error('Failed to show create pull request form:', error);
+            vscode.window.showErrorMessage(`Failed to show create pull request form: ${error.message}`);
+        }
     }
 
     async loadBranches(repository) {
