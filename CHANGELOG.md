@@ -5,9 +5,19 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### [Unreleased]
 
+#### Added
+
+- Branch switching/checkout: switch between branches in your repository with a quick picker.
+- Quick branch creation from Issues: create a new branch directly from an issue with auto-generated branch names.
+- Quick branch creation from Pull Requests: create a new branch from PR details with branch base selection.
+- Branch context menu actions: right-click on issues and PRs to create branches.
+- Create Branch buttons in Issue and PR detail panels for easy branch creation workflow.
+- `gitea.switchBranch` command: switch branches from the command palette.
+- `gitea.createBranchFromIssue` command: create a branch linked to an issue.
+- `gitea.createBranchFromPR` command: create a branch linked to a pull request.
+
 #### Planned
 
-- Branch tagging and improved workflows.
 - Inline code review with diff views.
 - Advanced PR filtering and sorting.
 - Markdown Support in PR and Issue Details.

@@ -100,6 +100,21 @@
                 "command": "gitea.viewPullRequestDetails",
                 "title": "View Pull Request Details",
                 "icon": "$(eye)"
+            },
+            {
+                "command": "gitea.switchBranch",
+                "title": "Gitea: Switch Branch",
+                "icon": "$(git-branch)"
+            },
+            {
+                "command": "gitea.createBranchFromIssue",
+                "title": "Gitea: Create Branch from Issue",
+                "icon": "$(git-branch)"
+            },
+            {
+                "command": "gitea.createBranchFromPR",
+                "title": "Gitea: Create Branch from Pull Request",
+                "icon": "$(git-branch)"
             }
         ],
         "viewsContainers": {
@@ -195,6 +210,16 @@
                     "command": "gitea.viewPullRequestDetails",
                     "when": "view == gitea.pullRequests && viewItem == pullRequest",
                     "group": "inline"
+                },
+                {
+                    "command": "gitea.createBranchFromIssue",
+                    "when": "view == gitea.issues && viewItem == issue",
+                    "group": "1_branch"
+                },
+                {
+                    "command": "gitea.createBranchFromPR",
+                    "when": "view == gitea.pullRequests && viewItem == pullRequest",
+                    "group": "1_branch"
                 }
             ]
         },

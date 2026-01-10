@@ -4,6 +4,7 @@ const GiteaAuth = require('./features/auth');
 const { RepositoryProvider, IssueProvider, PullRequestProvider } = require('./features/treeProviders');
 const { PullRequestWebviewProvider, IssueWebviewProvider, PullRequestCreationProvider } = require('./features/webviewProviders');
 const NotificationManager = require('./features/notifications');
+const BranchManager = require('./features/branches');
 
 /**
  * @param {vscode.ExtensionContext} context
@@ -28,6 +29,9 @@ async function activate(context) {
 
         // Initialize notification manager
         const notificationManager = new NotificationManager(auth);
+
+        // Initialize branch manager
+        const branchManager = new BranchManager(auth);
 
     // Register tree views
     const repositoryTreeView = vscode.window.createTreeView('gitea.repositories', {
@@ -429,6 +433,78 @@ async function activate(context) {
         }
     });
 
+    // Switch branch command
+    const switchBranchCommand = vscode.commands.registerCommand('gitea.switchBranch', async (item) => {
+        try {
+            let repoName;
+            
+            // Get repo name from tree item if available
+            if (item && item.metadata && item.metadata.repository) {
+                repoName = item.metadata.repository;
+            } else if (item && item.repository && item.repository.full_name) {
+                repoName = item.repository.full_name;
+            } else {
+                // Prompt user to select repository
+                const repos = await auth.makeRequest('/api/v1/user/repos');
+                const workspaceRepos = repositoryProvider.filterRepositoriesByWorkspace(repos || []);
+                
+                if (workspaceRepos.length === 0) {
+                    vscode.window.showWarningMessage('No repositories found in workspace.');
+                    return;
+                }
+                
+                const selected = await vscode.window.showQuickPick(
+                    workspaceRepos.map(r => ({ label: r.name, value: r.full_name })),
+                    { placeHolder: 'Select repository' }
+                );
+                
+                if (!selected) return;
+                repoName = selected.value;
+            }
+            
+            await branchManager.switchBranch(repoName);
+        } catch (error) {
+            console.error('Failed to switch branch:', error);
+            vscode.window.showErrorMessage(`Failed to switch branch: ${error.message}`);
+        }
+    });
+
+    // Create branch from issue command
+    const createBranchFromIssueCommand = vscode.commands.registerCommand('gitea.createBranchFromIssue', async (treeItem) => {
+        try {
+            if (!treeItem || !treeItem.metadata) {
+                vscode.window.showErrorMessage('No issue selected');
+                return;
+            }
+            
+            const repoName = treeItem.metadata.repository;
+            const issueNumber = treeItem.metadata.number;
+            
+            await branchManager.createBranchFromIssue(repoName, issueNumber);
+        } catch (error) {
+            console.error('Failed to create branch from issue:', error);
+            vscode.window.showErrorMessage(`Failed to create branch from issue: ${error.message}`);
+        }
+    });
+
+    // Create branch from pull request command
+    const createBranchFromPRCommand = vscode.commands.registerCommand('gitea.createBranchFromPR', async (treeItem) => {
+        try {
+            if (!treeItem || !treeItem.metadata) {
+                vscode.window.showErrorMessage('No pull request selected');
+                return;
+            }
+            
+            const repoName = treeItem.metadata.repository;
+            const prNumber = treeItem.metadata.number;
+            
+            await branchManager.createBranchFromPullRequest(repoName, prNumber);
+        } catch (error) {
+            console.error('Failed to create branch from PR:', error);
+            vscode.window.showErrorMessage(`Failed to create branch from PR: ${error.message}`);
+        }
+    });
+
     // Add all disposables to subscriptions
     context.subscriptions.push(
         repositoryTreeView,
@@ -444,6 +520,9 @@ async function activate(context) {
         createRepositoryCommand,
         createIssueCommand,
         createPullRequestCommand,
+        switchBranchCommand,
+        createBranchFromIssueCommand,
+        createBranchFromPRCommand,
         openRepositoryCommand,
         openInBrowserCommand,
         openIssueInBrowserCommand,

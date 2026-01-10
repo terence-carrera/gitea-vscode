@@ -66,6 +66,11 @@ class PullRequestWebviewProvider {
                             case 'closePR':
                                 await this.closePullRequest(owner, repo, prNumber);
                                 break;
+                            case 'createBranch':
+                                vscode.commands.executeCommand('gitea.createBranchFromPR', {
+                                    metadata: { repository: `${owner}/${repo}`, number: prNumber }
+                                });
+                                break;
                             case 'openInBrowser':
                                 vscode.env.openExternal(vscode.Uri.parse(prDetails.html_url));
                                 break;
@@ -404,10 +409,12 @@ class PullRequestWebviewProvider {
             <button class="secondary" onclick="mergePR('rebase')">Rebase and Merge</button>
         ` : '<p style="color: var(--vscode-errorForeground);">This PR has conflicts and cannot be merged.</p>'}
         <button class="danger" onclick="closePR()">Close PR</button>
+        <button class="secondary" onclick="createBranch()">Create Branch</button>
         <button class="secondary" onclick="openInBrowser()">Open in Browser</button>
     </div>
     ` : `
     <div class="actions">
+        <button class="secondary" onclick="createBranch()">Create Branch</button>
         <button class="secondary" onclick="openInBrowser()">Open in Browser</button>
     </div>
     `}
@@ -440,6 +447,10 @@ class PullRequestWebviewProvider {
             showConfirmation('Close Pull Request', 'Are you sure you want to close this pull request?', () => {
                 vscode.postMessage({ command: 'closePR' });
             });
+        }
+
+        function createBranch() {
+            vscode.postMessage({ command: 'createBranch' });
         }
 
         function showConfirmation(title, message, onConfirm) {
@@ -545,6 +556,11 @@ class IssueWebviewProvider {
                             case 'reopenIssue':
                                 await this.reopenIssue(owner, repo, issueNumber);
                                 panel.dispose();
+                                break;
+                            case 'createBranch':
+                                vscode.commands.executeCommand('gitea.createBranchFromIssue', {
+                                    metadata: { repository: `${owner}/${repo}`, number: issueNumber }
+                                });
                                 break;
                             case 'openInBrowser':
                                 vscode.env.openExternal(vscode.Uri.parse(issueDetails.html_url));
@@ -806,6 +822,7 @@ class IssueWebviewProvider {
                 ? '<button class="danger" onclick="closeIssue()">Close Issue</button>'
                 : '<button class="success" onclick="reopenIssue()">Reopen Issue</button>'
             }
+        <button class="secondary" onclick="createBranch()">Create Branch</button>
         <button class="secondary" onclick="openInBrowser()">Open in Browser</button>
     </div>
 
@@ -829,6 +846,10 @@ class IssueWebviewProvider {
 
         function reopenIssue() {
             vscode.postMessage({ command: 'reopenIssue' });
+        }
+
+        function createBranch() {
+            vscode.postMessage({ command: 'createBranch' });
         }
 
         function showConfirmation(title, message, onConfirm) {
