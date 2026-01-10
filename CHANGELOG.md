@@ -32,6 +32,10 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Add Profile command: create new Gitea profiles for multiple accounts/instances.
 - Status bar indicator: displays current active Gitea profile with quick access to profile switcher.
 
+#### Changed
+
+- Performance tuning: cache GET responses with a 5-minute TTL, throttle refresh bursts, lazily initialize notifications, and defer notification polling to reduce startup cost and API load.
+
 #### Fixed
 
 - Repository path lookup now searches subdirectories (up to 2 levels deep) for better repository detection.

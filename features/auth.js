@@ -1,6 +1,7 @@
 const vscode = require('vscode');
 const https = require('https');
 const http = require('http');
+const { CacheManager } = require('./performanceOptimizer');
 
 class GiteaAuth {
     constructor() {
@@ -8,6 +9,7 @@ class GiteaAuth {
         this.authToken = null;
         this.activeProfile = null;
         this.profiles = {};
+        this.cache = new CacheManager(300000); // 5 minute TTL for API cache
     }
 
     /**
@@ -366,11 +368,22 @@ class GiteaAuth {
                 return;
             }
 
+            // Check cache for GET requests (safe to cache)
+            const method = options.method || 'GET';
+            if (method === 'GET') {
+                const cacheKey = `${this.instanceUrl}${endpoint}`;
+                const cached = this.cache.get(cacheKey);
+                if (cached) {
+                    resolve(cached);
+                    return;
+                }
+            }
+
             const url = new URL(endpoint, this.instanceUrl);
             const protocol = url.protocol === 'https:' ? https : http;
 
             const requestOptions = {
-                method: options.method || 'GET',
+                method: method,
                 headers: {
                     'Authorization': `token ${this.authToken}`,
                     'Content-Type': 'application/json',
@@ -388,7 +401,13 @@ class GiteaAuth {
                 res.on('end', () => {
                     if (res.statusCode >= 200 && res.statusCode < 300) {
                         try {
-                            resolve(JSON.parse(data));
+                            const parsed = JSON.parse(data);
+                            // Cache GET responses
+                            if (method === 'GET') {
+                                const cacheKey = `${this.instanceUrl}${endpoint}`;
+                                this.cache.set(cacheKey, parsed);
+                            }
+                            resolve(parsed);
                         } catch (e) {
                             void(e);
                             resolve(data);

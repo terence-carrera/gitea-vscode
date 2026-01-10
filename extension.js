@@ -6,6 +6,7 @@ const { PullRequestWebviewProvider, IssueWebviewProvider, PullRequestCreationPro
 const NotificationManager = require('./features/notifications');
 const BranchManager = require('./features/branches');
 const StashManager = require('./features/stash');
+const { debounce, throttle } = require('./features/performanceOptimizer');
 
 /**
  * @param {vscode.ExtensionContext} context
@@ -28,11 +29,24 @@ async function activate(context) {
         const issueWebviewProvider = new IssueWebviewProvider(auth);
         const prCreationProvider = new PullRequestCreationProvider(auth);
 
-        // Initialize notification manager
-        const notificationManager = new NotificationManager(auth);
+        // Lazy-initialize notification manager (defer to reduce startup time)
+        let notificationManager;
+        const getNotificationManager = () => {
+            if (!notificationManager) {
+                notificationManager = new NotificationManager(auth);
+            }
+            return notificationManager;
+        };
 
         // Initialize branch manager
         const branchManager = new BranchManager(auth);
+
+        // Throttle refresh operations to prevent excessive API calls
+        const throttledRefresh = throttle(() => {
+            repositoryProvider.refresh();
+            issueProvider.refresh();
+            pullRequestProvider.refresh();
+        }, 1000);
 
         // Create status bar item to show current Gitea account
         const giteaStatusBar = vscode.window.createStatusBarItem(
@@ -195,7 +209,7 @@ async function activate(context) {
                 vscode.window.showWarningMessage('Gitea is not configured. Please configure first.');
                 return;
             }
-            await notificationManager.toggleMonitoring();
+            await getNotificationManager().toggleMonitoring();
         } catch (error) {
             console.error('Failed to toggle notifications:', error);
             vscode.window.showErrorMessage(`Failed to toggle notifications: ${error.message}`);
@@ -205,7 +219,7 @@ async function activate(context) {
     // Get notification status command
     const notificationStatusCommand = vscode.commands.registerCommand('gitea.notificationStatus', () => {
         try {
-            const status = notificationManager.getStatus();
+            const status = getNotificationManager().getStatus();
             const message = status.isMonitoring
                 ? `Notifications enabled (polling every ${status.pollInterval / 1000}s)`
                 : 'Notifications disabled';
@@ -542,9 +556,8 @@ async function activate(context) {
             try {
                 const added = await auth.addProfile();
                 if (added) {
-                    repositoryProvider.refresh();
-                    issueProvider.refresh();
-                    pullRequestProvider.refresh();
+                    auth.cache.clear();
+                    throttledRefresh();
 
                     // Update status bar with new profile
                     const activeProfile = auth.activeProfile || 'default';
@@ -571,9 +584,9 @@ async function activate(context) {
             try {
                 const switched = await auth.switchProfile();
                 if (switched) {
-                    repositoryProvider.refresh();
-                    issueProvider.refresh();
-                    pullRequestProvider.refresh();
+                    // Clear cache to get fresh data from new account
+                    auth.cache.clear();
+                    throttledRefresh();
 
                     // Update status bar with new profile
                     const activeProfile = auth.activeProfile || 'default';
@@ -659,7 +672,12 @@ async function activate(context) {
         try {
             const config = vscode.workspace.getConfiguration('gitea');
             if (config.get('enableNotifications')) {
-                await notificationManager.startMonitoring();
+                // Defer notification startup to avoid blocking extension activation
+                setTimeout(() => {
+                    getNotificationManager().startMonitoring().catch(err => {
+                        console.error('Failed to start notifications:', err);
+                    });
+                }, 2000); // 2 second delay
             }
         } catch (error) {
             console.error('Failed to start notifications:', error);
@@ -671,7 +689,9 @@ async function activate(context) {
     context.subscriptions.push(
         new vscode.Disposable(() => {
             try {
-                notificationManager.stopMonitoring();
+                if (notificationManager) {
+                    notificationManager.stopMonitoring();
+                }
             } catch (error) {
                 console.error('Failed to stop notifications:', error);
             }

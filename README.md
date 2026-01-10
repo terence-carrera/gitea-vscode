@@ -14,6 +14,7 @@ Integrate Gitea into VS Code: browse repositories, track issues and pull request
 - Merge PRs: merge, squash, or rebase pull requests with confirmation.
 - Close/reopen: close or reopen issues and pull requests.
 - Notifications: optional polling to surface repository activity inside VS Code.
+- Performance-aware: caches read-only API responses, throttles refresh bursts, and defers notification polling to reduce startup cost and API load.
 - Create actions: create Repository, Issue, and Pull Request from the views.
 - Open actions: open repository/issue/pull request in your default browser.
 - Clone and open: clone a remote repo and open it in a new window if not already present.
@@ -63,6 +64,12 @@ Notes
 - `gitea.enableNotifications`: Enable notifications for repository activities.
 - `gitea.notificationPollInterval`: Poll interval for notifications in ms (minimum 30000).
 - `gitea.defaultRepoStartingPath`: Default local path for cloning new repositories.
+
+### Performance behavior
+
+- GET requests are cached for 5 minutes to reduce duplicate API calls; caches clear automatically when you switch or add profiles.
+- Refresh commands are throttled to prevent rapid bursts of network requests.
+- Notification polling initializes lazily and starts after a short delay to keep extension activation snappy.
 
 ### Requirements
 
