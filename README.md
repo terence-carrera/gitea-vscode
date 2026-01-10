@@ -74,6 +74,51 @@ Notes
 
 - This extension is in active development; features and APIs may change.
 
+### Contributing
+
+Contributions are welcome! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
+
+#### How to Contribute
+
+1. **Fork the repository** on Gitea or GitHub.
+2. **Clone your fork** locally:
+   ```bash
+   git clone https://github.com/terence-carrera/gitea-vscode.git
+   cd gitea-vscode
+   ```
+3. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+4. **Create a feature branch**:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+5. **Make your changes** and test thoroughly.
+6. **Commit your changes** with clear, descriptive messages:
+   ```bash
+   git commit -m "Add feature: description of your changes"
+   ```
+7. **Push to your fork**:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+8. **Submit a pull request** with a clear description of the changes and any related issues.
+
+#### Development
+
+- Run the extension in debug mode by pressing `F5` in VS Code.
+- Make sure to test your changes with a real Gitea instance.
+- Follow existing code style and patterns.
+- Update documentation as needed.
+
+#### Reporting Issues
+
+If you encounter bugs or have feature requests, please [open an issue](https://github.com/terence-carrera/gitea-vscode/issues) with:
+- A clear description of the problem or suggestion
+- Steps to reproduce (for bugs)
+- Your environment (VS Code version, OS, Gitea version)
+
 ### Release Notes
 
 See [CHANGELOG.md](CHANGELOG.md) for details.

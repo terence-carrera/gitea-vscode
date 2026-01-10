@@ -17,12 +17,48 @@ class BranchManager {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders) return null;
 
+        const repoNameLower = repoName.toLowerCase();
+
+        // Helper function to search for git repos recursively
+        const findGitReposInDir = (dirPath, depth = 2) => {
+            const foundRepos = [];
+            if (depth < 0) return foundRepos;
+            try {
+                const gitPath = path.join(dirPath, '.git');
+                if (fs.existsSync(gitPath)) foundRepos.push(dirPath);
+                const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+                for (const entry of entries) {
+                    if (entry.isDirectory() && !entry.name.startsWith('.')) {
+                        const subDirPath = path.join(dirPath, entry.name);
+                        foundRepos.push(...findGitReposInDir(subDirPath, depth - 1));
+                    }
+                }
+            } catch (err) {
+                // Ignore errors for inaccessible directories
+            }
+            return foundRepos;
+        };
+
+        // Search through all workspace folders and their subdirectories
         for (const folder of workspaceFolders) {
-            const gitConfigPath = path.join(folder.uri.fsPath, '.git', 'config');
-            if (fs.existsSync(gitConfigPath)) {
-                const config = fs.readFileSync(gitConfigPath, 'utf8');
-                if (config.includes(`/${repoName}`) || config.includes(`/${repoName}.git`)) {
-                    return folder.uri.fsPath;
+            const folderPath = folder.uri.fsPath;
+            const gitRepoPaths = findGitReposInDir(folderPath);
+
+            for (const repoPath of gitRepoPaths) {
+                const gitConfigPath = path.join(repoPath, '.git', 'config');
+                if (fs.existsSync(gitConfigPath)) {
+                    try {
+                        const config = fs.readFileSync(gitConfigPath, 'utf8').toLowerCase();
+                        // Match against various formats: full path, .git suffix, or just repo name
+                        if (config.includes(`/${repoNameLower}`) ||
+                            config.includes(`/${repoNameLower}.git`) ||
+                            config.includes(`:${repoNameLower}.git`) ||
+                            config.includes(`:${repoNameLower}/`)) {
+                            return repoPath;
+                        }
+                    } catch (err) {
+                        // Ignore read errors
+                    }
                 }
             }
         }

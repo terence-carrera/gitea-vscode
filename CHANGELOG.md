@@ -5,6 +5,14 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### [Unreleased]
 
+#### Planned
+
+- Advanced PR filtering and sorting.
+- Enhanced notification system with actionable alerts.
+- Branch delete/rename operations.
+
+### [0.1.3] - 2026-01-10
+
 #### Added
 
 - Branch switching/checkout: switch between branches in your repository with a quick picker.
@@ -15,17 +23,26 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - `gitea.switchBranch` command: switch branches from the command palette.
 - `gitea.createBranchFromIssue` command: create a branch linked to an issue.
 - `gitea.createBranchFromPR` command: create a branch linked to a pull request.
+- Contributing section in README with contribution guidelines, development setup, and issue reporting instructions.
+- Markdown rendering support: PR and Issue descriptions and comments now render with full markdown formatting including headings, code blocks, blockquotes, and links.
+- Inline code review with diff views: view file changes directly in PR detail panels with syntax-highlighted diffs showing additions, deletions, and context.
+- Collapsible file diff viewer: click file headers to expand/collapse individual file diffs for easier navigation.
+- Stash management integration: manage git stashes with support for creating, applying, popping, dropping, and viewing stashes directly from VS Code.
+- Profile switching for multiple Gitea accounts: configure and switch between multiple Gitea instances/accounts with profile management commands.
+- Add Profile command: create new Gitea profiles for multiple accounts/instances.
+- Status bar indicator: displays current active Gitea profile with quick access to profile switcher.
 
-#### Planned
+#### Fixed
 
-- Inline code review with diff views.
-- Advanced PR filtering and sorting.
-- Markdown Support in PR and Issue Details.
-- Enhanced notification system with actionable alerts.
+- Repository path lookup now searches subdirectories (up to 2 levels deep) for better repository detection.
+- Improved repository matching with support for multiple URL formats (SSH, HTTPS, with/without .git suffix).
+- Fixed "Repository not found in workspace" error when using `gitea.switchBranch` from command palette.
+- Fixed profile list not showing created profiles by reloading from settings on demand.
 
 ### [0.1.2] - 2026-01-10
 
 #### Changed
+
 - Extension compatibility updated to VS Code 1.90.0 and above.
 
 ### [0.1.1] - 2026-01-09
