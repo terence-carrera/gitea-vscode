@@ -62,10 +62,11 @@ Notes
 - `gitea.authToken`: Personal Access Token for Gitea API authentication.
 - `gitea.enableNotifications`: Enable notifications for repository activities.
 - `gitea.notificationPollInterval`: Poll interval for notifications in ms (minimum 30000).
+- `gitea.defaultRepoStartingPath`: Default local path for cloning new repositories.
 
 ### Requirements
 
-- VS Code 1.100.0 or newer.
+- VS Code 1.90.0 or newer.
 - Git installed.
 - Access to a Gitea instance and a Personal Access Token.
 
