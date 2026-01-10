@@ -8,6 +8,7 @@ const BranchManager = require('./features/branches');
 const DeletedBranchesProvider = require('./features/deletedBranchesProvider');
 const StashManager = require('./features/stash');
 const { debounce, throttle } = require('./features/performanceOptimizer');
+const { showImportIssuesDialog } = require('./features/importIssues');
 
 /**
  * @param {vscode.ExtensionContext} context
@@ -339,6 +340,39 @@ async function activate(context) {
             vscode.window.showErrorMessage(`Failed to create issue: ${error.message}`);
         }
     });
+
+        // Import issues from XLSX command
+        const importIssuesCommand = vscode.commands.registerCommand('gitea.importIssues', async () => {
+            console.log('[DEBUG] Import Issues command triggered');
+
+            if (!auth.isConfigured()) {
+                vscode.window.showWarningMessage('Gitea is not configured. Please configure first.');
+                return;
+            }
+
+            try {
+                console.log('[DEBUG] Fetching repositories...');
+                const repos = await auth.makeRequest('/api/v1/user/repos');
+                const workspaceRepos = repositoryProvider.filterRepositoriesByWorkspace(repos || []);
+
+                console.log(`[DEBUG] Found ${workspaceRepos.length} workspace repositories`);
+
+                if (workspaceRepos.length === 0) {
+                    vscode.window.showWarningMessage('No repositories found in workspace.');
+                    return;
+                }
+
+                // Show import dialog
+                console.log('[DEBUG] Showing import dialog...');
+                await showImportIssuesDialog(auth, workspaceRepos);
+
+                // Refresh after import
+                setTimeout(() => issueProvider.refresh(), 1000);
+            } catch (error) {
+                console.error('[ERROR] Import issues command failed:', error);
+                vscode.window.showErrorMessage(`Failed to import issues: ${error.message}`);
+            }
+        });
 
     // Open repository in VS Code
     const openRepositoryCommand = vscode.commands.registerCommand('gitea.openRepository', async (item) => {
@@ -885,6 +919,7 @@ async function activate(context) {
         notificationStatusCommand,
         createRepositoryCommand,
         createIssueCommand,
+        importIssuesCommand,
         createPullRequestCommand,
         switchBranchCommand,
         createBranchFromIssueCommand,

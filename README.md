@@ -4,6 +4,33 @@ Integrate Gitea into VS Code: browse repositories, track issues and pull request
 
 ### Features
 
+#### Issue Management
+
+- **Import Issues from XLSX**: Bulk import issues from Excel files with automatic label mapping
+  - Support for XLSX format with flexible column naming
+  - Automatic label name to ID mapping (labels must exist in repository)
+  - Interactive preview and configuration dialog
+  - Detailed error reporting with failure summary
+  - See [Import Issues Documentation](docs/IMPORT_ISSUES_FEATURE.md) for details
+- **Issues View**: Grouped by Repository → State (Open/Closed) → Items, with quick open-in-browser
+- **WebView Creation**: Rich forms for creating issues with repository selection, labels, and assignees
+- **WebView Details**: Rich detail panels with inline commenting and actions
+- **Search Issues**: Quick search with flat result lists per view
+
+#### Pull Request Management
+
+- **Pull Requests View**: Grouped by Repository → State (Open/WIP/Closed) → Items, with draft/WIP detection
+- **WebView Creation**: Rich forms for creating pull requests with repository selection, branch picker, labels, and assignees
+- **WebView Details**: Rich detail panels with reviews, comments, and merge actions
+- **Reviews**: Approve, comment, or request changes on pull requests directly from VS Code
+- **Merge PRs**: Merge, squash, or rebase pull requests with confirmation
+- **PR Commits View**: See all commits in a pull request with SHA, message, author, and timestamp
+- **Conflict Detection**: Displays specific conflicting files when merge conflicts are detected in a PR
+- **Out-of-date PR Alerts**: Notifies when a PR branch is behind the base branch with quick update action
+- **Search Pull Requests**: Quick search with flat result lists
+
+#### Branch Management
+
 - **Branch Deletion Tracking & Restoration**: Comprehensive branch management with deletion history, visual diff previews, and automatic sync
   - Track deleted branches across sessions with persistent storage
   - Restore deleted branches from extension history or Git reflog
@@ -12,24 +39,29 @@ Integrate Gitea into VS Code: browse repositories, track issues and pull request
   - Automatic sync across machines via VS Code Settings Sync
   - Deleted Branches view with repository grouping and timestamps
   - Configurable retention period (1-365 days) for automatic cleanup
-- Repositories view: lists only repositories present in your workspace (detected via local Git remotes).
-- Issues view: grouped by Repository → State (Open/Closed) → Items, with quick open-in-browser.
-- Pull Requests view: grouped by Repository → State (Open/WIP/Closed) → Items, with draft/WIP detection.
-- Search: repository, issue, and PR search with flat result lists per view.
-- WebView details: rich detail panels for Issues and Pull Requests with inline commenting and actions.
-- WebView creation: rich forms for creating issues and pull requests with repository selection, branch picker, labels, and assignees.
-- Reviews: approve, comment, or request changes on pull requests directly from VS Code.
-- Merge PRs: merge, squash, or rebase pull requests with confirmation.
-- Close/reopen: close or reopen issues and pull requests.
-- Notifications: optional polling to surface repository activity inside VS Code.
-- Notification alerts: quick actions to open issues/PRs in VS Code, open in browser, or copy commit SHAs directly from toasts.
-- Performance-aware: caches read-only API responses, throttles refresh bursts, and defers notification polling to reduce startup cost and API load.
-- PR commits view: see all commits in a pull request with SHA, message, author, and timestamp.
-- Conflict detection: displays specific conflicting files when merge conflicts are detected in a PR.
-- Out-of-date PR alerts: notifies when a PR branch is behind the base branch with quick update action.
-- Create actions: create Repository, Issue, and Pull Request from the views.
-- Open actions: open repository/issue/pull request in your default browser.
-- Clone and open: clone a remote repo and open it in a new window if not already present.
+- **Branch Switching**: Switch between branches in your repository with a quick picker
+- **Quick Branch Creation**: Create branches directly from issues or pull requests with auto-generated names
+
+#### Repository Management
+
+- **Repositories View**: Lists only repositories present in your workspace (detected via local Git remotes)
+- **Create Repository**: Create new repositories directly from VS Code
+- **Clone and Open**: Clone a remote repo and open it in a new window if not already present
+- **Search Repositories**: Quick search across your Gitea repositories
+- **Open Actions**: Open repository/issue/pull request in your default browser
+
+#### Notifications & Alerts
+
+- **Notifications**: Optional polling to surface repository activity inside VS Code
+- **Notification Alerts**: Quick actions to open issues/PRs in VS Code, open in browser, or copy commit SHAs directly from toasts
+- **Performance-aware**: Caches read-only API responses, throttles refresh bursts, and defers notification polling to reduce startup cost and API load
+
+#### Additional Features
+
+- **Profile Management**: Configure and switch between multiple Gitea instances/accounts with profile management commands
+- **Stash Management**: Manage git stashes with support for creating, applying, popping, dropping, and viewing stashes
+- **Markdown Rendering**: PR and Issue descriptions and comments render with full markdown formatting
+- **Inline Code Review**: View file changes directly in PR detail panels with syntax-highlighted diffs
 
 ### Getting Started
 
@@ -61,6 +93,7 @@ Notes
 - Gitea: Check Notification Status (`gitea.notificationStatus`)
 - Gitea: Create Repository (`gitea.createRepository`)
 - Gitea: Create Issue (`gitea.createIssue`)
+- Gitea: Import Issues from XLSX (`gitea.importIssues`): bulk import issues from Excel file.
 - Gitea: Create Pull Request (`gitea.createPullRequest`)
 - Open Repository in VS Code (`gitea.openRepository`)
 - Open in Browser (`gitea.openInBrowser`)
@@ -81,7 +114,7 @@ Notes
 
 ### Performance behavior
 
-- GET requests are cached for 5 minutes to reduce duplicate API calls; caches clear automatically when you switch or add profiles.
+- GET requests are cached for 10 seconds to reduce duplicate API calls; caches clear automatically when you switch or add profiles.
 - Refresh commands are throttled to prevent rapid bursts of network requests.
 - Notification polling initializes lazily and starts after a short delay to keep extension activation snappy.
 

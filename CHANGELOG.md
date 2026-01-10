@@ -12,6 +12,19 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### [0.1.5] - 2026-01-11
 
+#### Added
+
+- **Import Issues from XLSX**: bulk import issues from Excel files with automatic label mapping and error reporting.
+  - Support for Excel XLSX format with flexible column naming (case-insensitive).
+  - Required column: Title; optional columns: Description, Labels, Assignee, Milestone, Priority, Due Date.
+  - Automatic label name to ID mapping - labels must exist in target repository.
+  - Interactive import options dialog with preview of first 3 issues.
+  - Import progress tracking with detailed success/failure reporting.
+  - Comprehensive error handling with detailed failure information for troubleshooting.
+  - `gitea.importIssues` command: import issues from XLSX file into selected repository.
+  - Archive icon button in Issues view for easy access to import functionality.
+  - Full documentation in [docs/IMPORT_ISSUES_FEATURE.md](docs/IMPORT_ISSUES_FEATURE.md).
+
 #### Changed
 
 - **Status bar icon**: now uses `$(account)` icon for better visual consistency with VS Code.

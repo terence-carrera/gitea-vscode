@@ -67,6 +67,11 @@
                 "icon": "$(new-file)"
             },
             {
+                "command": "gitea.importIssues",
+                "title": "Gitea: Import Issues from XLSX",
+                "icon": "$(archive)"
+            },
+            {
                 "command": "gitea.createPullRequest",
                 "title": "Gitea: Create Pull Request",
                 "icon": "$(git-pull-request-create)"
@@ -253,6 +258,11 @@
                     "group": "navigation@2"
                 },
                 {
+                    "command": "gitea.importIssues",
+                    "when": "view == gitea.issues",
+                    "group": "navigation@3"
+                },
+                {
                     "command": "gitea.createPullRequest",
                     "when": "view == gitea.pullRequests",
                     "group": "navigation@2"
@@ -416,6 +426,7 @@
         "@vscode/test-electron": "^2.5.2"
     },
     "dependencies": {
-        "marked": "^12.0.0"
+        "marked": "^12.0.0",
+        "xlsx": "^0.18.5"
     }
 }

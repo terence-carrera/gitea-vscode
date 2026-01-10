@@ -9,7 +9,7 @@ class GiteaAuth {
         this.authToken = null;
         this.activeProfile = null;
         this.profiles = {};
-        this.cache = new CacheManager(300000); // 5 minute TTL for API cache
+        this.cache = new CacheManager(1000); // 10 second TTL for API cache
     }
 
     /**
