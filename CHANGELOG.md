@@ -8,7 +8,6 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 #### Planned
 
 - Advanced PR filtering and sorting.
-- Enhanced notification system with actionable alerts.
 - Branch delete/rename operations.
 
 ### [0.1.3] - 2026-01-10
@@ -31,6 +30,10 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Profile switching for multiple Gitea accounts: configure and switch between multiple Gitea instances/accounts with profile management commands.
 - Add Profile command: create new Gitea profiles for multiple accounts/instances.
 - Status bar indicator: displays current active Gitea profile with quick access to profile switcher.
+- Enhanced notification system with actionable alerts: open issues/PRs in VS Code or browser, and copy commit SHAs directly from alerts.
+- Commits section in PR detail view: displays all commits with SHA, message, author, and timestamp for better code review context.
+- Conflict details display: when a PR has merge conflicts, shows the actual list of conflicting files with conflict markers instead of a generic error message.
+- Out-of-date PR detection: displays an alert banner when a PR branch is behind the base branch with an "Update branch by merge" action button.
 
 #### Changed
 
@@ -39,6 +42,7 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 #### Fixed
 
 - Repository path lookup now searches subdirectories (up to 2 levels deep) for better repository detection.
+- PR detail view now shows an accurate commit count by fetching commit list when the API omits the count.
 - Improved repository matching with support for multiple URL formats (SSH, HTTPS, with/without .git suffix).
 - Fixed "Repository not found in workspace" error when using `gitea.switchBranch` from command palette.
 - Fixed profile list not showing created profiles by reloading from settings on demand.

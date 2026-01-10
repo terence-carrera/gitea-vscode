@@ -17,7 +17,6 @@ class NotificationManager {
             if (this.isMonitoring) return;
 
             this.isMonitoring = true;
-            vscode.window.showInformationMessage('Repository monitoring started');
 
             const config = vscode.workspace.getConfiguration('gitea');
             this.pollInterval = config.get('notificationPollInterval') || 60000;
@@ -193,13 +192,25 @@ class NotificationManager {
             const title = count === 1 ? 'New Issue' : `${count} New Issues`;
             const message = `${title} in ${repo.full_name}`;
 
+            const firstIssue = issues[0];
+            const issueItem = {
+                metadata: {
+                    number: firstIssue.number,
+                    repository: repo.full_name,
+                    htmlUrl: firstIssue.html_url
+                }
+            };
+
             vscode.window.showInformationMessage(
                 message,
-                'View',
+                'View in VS Code',
+                'Open in Browser',
                 'Dismiss'
             ).then(selection => {
-                if (selection === 'View') {
-                    vscode.commands.executeCommand('gitea.searchIssues', issues[0].title);
+                if (selection === 'View in VS Code') {
+                    vscode.commands.executeCommand('gitea.viewIssueDetails', issueItem);
+                } else if (selection === 'Open in Browser') {
+                    vscode.commands.executeCommand('gitea.openIssueInBrowser', issueItem);
                 }
             });
         } catch (error) {
@@ -216,13 +227,25 @@ class NotificationManager {
             const title = count === 1 ? 'New Pull Request' : `${count} New Pull Requests`;
             const message = `${title} in ${repo.full_name}`;
 
+            const firstPR = prs[0];
+            const prItem = {
+                metadata: {
+                    number: firstPR.number,
+                    repository: repo.full_name,
+                    htmlUrl: firstPR.html_url
+                }
+            };
+
             vscode.window.showInformationMessage(
                 message,
-                'View',
+                'View in VS Code',
+                'Open in Browser',
                 'Dismiss'
             ).then(selection => {
-                if (selection === 'View') {
-                    vscode.commands.executeCommand('gitea.searchPullRequests', prs[0].title);
+                if (selection === 'View in VS Code') {
+                    vscode.commands.executeCommand('gitea.viewPullRequestDetails', prItem);
+                } else if (selection === 'Open in Browser') {
+                    vscode.commands.executeCommand('gitea.openPullRequestInBrowser', prItem);
                 }
             });
         } catch (error) {
@@ -239,7 +262,18 @@ class NotificationManager {
             const title = count === 1 ? 'New Commit' : `${count} New Commits`;
             const message = `${title} in ${repo.full_name}`;
 
-            vscode.window.showInformationMessage(message, 'Dismiss');
+            const firstCommit = commits[0];
+            const commitUrl = firstCommit.html_url || firstCommit.url || firstCommit.htmlUrl;
+            const actions = commitUrl ? ['Open in Browser', 'Copy SHA', 'Dismiss'] : ['Copy SHA', 'Dismiss'];
+
+            vscode.window.showInformationMessage(message, ...actions).then(async selection => {
+                if (selection === 'Open in Browser' && commitUrl) {
+                    await vscode.env.openExternal(vscode.Uri.parse(commitUrl));
+                } else if (selection === 'Copy SHA') {
+                    await vscode.env.clipboard.writeText(firstCommit.sha);
+                    vscode.window.showInformationMessage('Commit SHA copied to clipboard');
+                }
+            });
         } catch (error) {
             console.error('Failed to notify new commits:', error);
         }

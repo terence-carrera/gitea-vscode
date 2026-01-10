@@ -20,15 +20,61 @@ class PullRequestWebviewProvider {
 
             // Fetch PR details
             const [owner, repo] = repository.split('/');
-            let prDetails, comments, reviews, files, diffContent;
+            let prDetails, comments, reviews, files, commitsList, diffContent, conflictingFiles = [], compareInfo = null;
 
             try {
-                [prDetails, comments, reviews, files] = await Promise.all([
+                [prDetails, comments, reviews, files, commitsList] = await Promise.all([
                     this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}`),
                     this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/issues/${prNumber}/comments`),
                     this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}/reviews`).catch(() => []),
-                    this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}/files`).catch(() => [])
+                    this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}/files`).catch(() => []),
+                    this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}/commits`).catch(() => [])
                 ]);
+
+                // Determine if branch is behind base (out-of-date)
+                try {
+                    const baseRef = encodeURIComponent(prDetails.base?.ref || '');
+                    const headRef = encodeURIComponent(prDetails.head?.ref || '');
+                    if (baseRef && headRef) {
+                        compareInfo = await this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/compare/${baseRef}...${headRef}`)
+                            .catch(() => null);
+                    }
+                } catch (e) {
+                    void (e);
+                    compareInfo = null;
+                }
+
+                // If PR has conflicts, identify conflicting files
+                if (prDetails.mergeable === false && files && files.length > 0) {
+                    // Files with conflicts have the standard merge conflict markers:
+                    // <<<<<<< HEAD (or current branch)
+                    // =======
+                    // >>>>>>> origin/branch (or incoming branch)
+                    conflictingFiles = files.filter(file => {
+                        if (file.status === 'conflicted') {
+                            return true;
+                        }
+                        
+                        // Check for presence of all three conflict markers in the patch
+                        if (file.patch) {
+                            const hasConflictStart = /^<{7} /m.test(file.patch);  // <<<<<<< (7 chars + space)
+                            const hasConflictSeparator = /^={7}$/m.test(file.patch);  // ======= (7 chars exactly)
+                            const hasConflictEnd = /^>{7} /m.test(file.patch);  // >>>>>>> (7 chars + space)
+                            
+                            return hasConflictStart && hasConflictSeparator && hasConflictEnd;
+                        }
+                        
+                        return false;
+                    });
+                    
+                    // Do NOT fall back to all files; if we cannot determine specifics,
+                    // leave the list empty and show a generic guidance message in the UI.
+                }
+
+                // Some Gitea endpoints don't return commit count; fall back to commits list length
+                prDetails.commits = typeof prDetails.commits === 'number'
+                    ? prDetails.commits
+                    : (Array.isArray(commitsList) ? commitsList.length : 0);
 
                 // Fetch the actual diff content
                 try {
@@ -90,6 +136,9 @@ class PullRequestWebviewProvider {
                             case 'openInBrowser':
                                 vscode.env.openExternal(vscode.Uri.parse(prDetails.html_url));
                                 break;
+                            case 'updateBranch':
+                                await this.updatePullRequestBranch(owner, repo, prNumber, message.style || 'merge');
+                                break;
                         }
                     } catch (error) {
                         console.error('Error handling webview message:', error);
@@ -98,7 +147,7 @@ class PullRequestWebviewProvider {
                 }
             );
 
-            panel.webview.html = this.getPullRequestHtml(panel.webview, prDetails, comments, reviews, files);
+            panel.webview.html = this.getPullRequestHtml(panel.webview, prDetails, comments, reviews, files, commitsList, conflictingFiles, compareInfo);
         } catch (error) {
             console.error('Failed to show pull request:', error);
             vscode.window.showErrorMessage(`Failed to show pull request: ${error.message}`);
@@ -158,10 +207,38 @@ class PullRequestWebviewProvider {
         }
     }
 
-    getPullRequestHtml(webview, pr, comments, reviews, files = []) {
+    async updatePullRequestBranch(owner, repo, prNumber, style = 'merge') {
+        try {
+            // Preferred Gitea endpoint to update a PR's branch by merging base into head
+            try {
+                await this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}/update`, {
+                    method: 'POST',
+                    body: { style }
+                });
+            } catch (firstErr) {
+                void (firstErr);
+                // Fallback: some instances might expect a different casing/key
+                await this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}/update`, {
+                    method: 'POST',
+                    body: { Style: style }
+                });
+            }
+
+            vscode.window.showInformationMessage('Branch updated from base via merge');
+            await this.showPullRequest(prNumber, `${owner}/${repo}`);
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to update branch: ${error.message}`);
+        }
+    }
+
+    getPullRequestHtml(webview, pr, comments, reviews, files = [], commits = [], conflictingFiles = [], compareInfo = null) {
         const stateColor = pr.state === 'open' ? '#3fb950' : pr.merged ? '#8957e5' : '#f85149';
         const stateIcon = pr.state === 'open' ? '●' : pr.merged ? '✓' : '×';
         const stateText = pr.state === 'open' ? 'Open' : pr.merged ? 'Merged' : 'Closed';
+        const behindCount = compareInfo
+            ? (Number(compareInfo.behind_by) || Number(compareInfo.behind) || Number(compareInfo.behindBy) || 0)
+            : 0;
+        const isOutOfDate = behindCount > 0;
 
         return `<!DOCTYPE html>
 <html>
@@ -323,6 +400,8 @@ class PullRequestWebviewProvider {
         }
         .actions {
             display: flex;
+            flex-direction: row;
+            align-items: center;
             gap: 8px;
             margin-top: 16px;
             padding-top: 16px;
@@ -479,6 +558,21 @@ class PullRequestWebviewProvider {
         </div>
     </div>
 
+    ${isOutOfDate ? `
+    <div class="section">
+        <div style="display:flex; align-items:flex-start; padding: 12px; background-color: rgba(255, 193, 7, 0.1); border: 1px solid var(--vscode-panel-border); border-left: 4px solid #d29922; border-radius: 6px;">
+            <div style="margin-right: 12px; color: #d29922;">⚠</div>
+            <div style="flex:1;">
+                <div style="font-weight:600; margin-bottom:6px;">This pull request is blocked because it's outdated.</div>
+                <div style="color: var(--vscode-descriptionForeground); margin-bottom: 10px;">This branch is out-of-date with the base branch${behindCount ? ` (behind by ${behindCount} commit${behindCount > 1 ? 's' : ''})` : ''}.</div>
+                <div>
+                    <button class="secondary" onclick="updateBranch('merge')">Update branch by merge</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    ` : ''}
+
     <div class="info-grid">
         <div class="info-item">
             <div class="info-label">Commits</div>
@@ -505,17 +599,19 @@ class PullRequestWebviewProvider {
     </div>
     ` : ''}
 
-    ${reviews && reviews.length > 0 ? `
+    ${commits && commits.length > 0 ? `
     <div class="section">
-        <div class="section-title">Reviews (${reviews.length})</div>
-        ${reviews.map(review => `
-            <div class="review review-${review.state?.toLowerCase()}">
+        <div class="section-title">Commits (${commits.length})</div>
+        ${commits.map(commit => `
+            <div class="comment">
                 <div class="comment-header">
-                    <span class="comment-author">${review.user?.login || 'Unknown'}</span>
-                    <span class="comment-date">${new Date(review.submitted_at).toLocaleString()}</span>
+                    <span class="comment-author">${commit.commit?.author?.name || commit.author?.login || 'Unknown'}</span>
+                    <span class="comment-date">${new Date(commit.commit?.author?.date || commit.created_at).toLocaleString()}</span>
                 </div>
-                <div><strong>${review.state || 'COMMENTED'}</strong></div>
-                ${review.body ? `<div class="comment-body markdown-body">${this.renderMarkdown(review.body)}</div>` : ''}
+                <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: start; margin-bottom: 8px; width: 100%;">
+                    <div class="comment-body">${this.escapeHtml(commit.commit?.message || commit.message || 'No message')}</div>
+                    <code style="background-color: var(--vscode-textCodeBlock-background); padding: 2px 6px; border-radius: 3px; font-family: var(--vscode-editor-font-family); font-size: 12px;">${commit.sha?.substring(0, 7) || 'unknown'}</code>
+                </div>
             </div>
         `).join('')}
     </div>
@@ -568,6 +664,22 @@ class PullRequestWebviewProvider {
         </div>
     </div>
 
+    ${reviews && reviews.length > 0 ? `
+    <div class="section">
+        <div class="section-title">Reviews (${reviews.length})</div>
+        ${reviews.map(review => `
+            <div class="review review-${review.state?.toLowerCase()}">
+                <div class="comment-header">
+                    <span class="comment-author">${review.user?.login || 'Unknown'}</span>
+                    <span class="comment-date">${new Date(review.submitted_at).toLocaleString()}</span>
+                </div>
+                <div><strong>${review.state || 'COMMENTED'}</strong></div>
+                ${review.body ? `<div class="comment-body markdown-body">${this.renderMarkdown(review.body)}</div>` : ''}
+            </div>
+        `).join('')}
+    </div>
+    ` : ''}
+
     ${pr.state === 'open' ? `
     <div class="section">
         <div class="section-title">Review Actions</div>
@@ -584,10 +696,27 @@ class PullRequestWebviewProvider {
             <button class="success" onclick="mergePR('merge')">Merge Pull Request</button>
             <button class="secondary" onclick="mergePR('squash')">Squash and Merge</button>
             <button class="secondary" onclick="mergePR('rebase')">Rebase and Merge</button>
-        ` : '<p style="color: var(--vscode-errorForeground);">This PR has conflicts and cannot be merged.</p>'}
-        <button class="danger" onclick="closePR()">Close PR</button>
-        <button class="secondary" onclick="createBranch()">Create Branch</button>
-        <button class="secondary" onclick="openInBrowser()">Open in Browser</button>
+            <button class="danger" onclick="closePR()">Close PR</button>
+            <button class="secondary" onclick="createBranch()">Create Branch</button>
+            <button class="secondary" onclick="openInBrowser()">Open in Browser</button>
+        ` : `
+            <div style="width: 100%;">
+                <div style="display: flex; align-items: center; padding: 12px; background-color: rgba(248, 81, 73, 0.1); border: 1px solid #f85149; border-radius: 6px; margin-bottom: 16px;">
+                    <span style="font-size: 20px; margin-right: 12px;">✕</span>
+                    <div>
+                        <div style="font-weight: 600; color: var(--vscode-errorForeground); margin-bottom: 4px;">This pull request has changes conflicting with the target branch.</div>
+                        ${conflictingFiles.length > 0 ? `
+                            <ul style="margin: 8px 0 0 0; padding-left: 20px; color: var(--vscode-descriptionForeground);">
+                                ${conflictingFiles.map(file => `<li style=\"font-family: var(--vscode-editor-font-family); font-size: 13px;\">${this.escapeHtml(file.filename)}</li>`).join('')}
+                            </ul>
+                        ` : `<div style="color: var(--vscode-descriptionForeground);">Conflicts detected, but the API did not identify specific files. Check the PR on your server or attempt a local merge for exact paths.</div>`}
+                    </div>
+                </div>
+                <button class="danger" onclick="closePR()">Close PR</button>
+                <button class="secondary" onclick="createBranch()">Create Branch</button>
+                <button class="secondary" onclick="openInBrowser()">Open in Browser</button>
+            </div>
+        `}
     </div>
     ` : `
     <div class="actions">
@@ -628,6 +757,10 @@ class PullRequestWebviewProvider {
 
         function createBranch() {
             vscode.postMessage({ command: 'createBranch' });
+        }
+
+        function updateBranch(style) {
+            vscode.postMessage({ command: 'updateBranch', style });
         }
 
         function showConfirmation(title, message, onConfirm) {
@@ -689,7 +822,7 @@ class PullRequestWebviewProvider {
         try {
             return marked.parse(text);
         } catch (error) {
-            void(error);
+            void (error);
             return this.escapeHtml(text);
         }
     }
@@ -1073,6 +1206,8 @@ class IssueWebviewProvider {
         }
         .actions {
             display: flex;
+            flex-direction: row;
+            align-items: center;
             gap: 8px;
             margin-top: 16px;
             padding-top: 16px;
@@ -1291,7 +1426,7 @@ class IssueWebviewProvider {
         try {
             return marked.parse(text);
         } catch (error) {
-            void(error);
+            void (error);
             return this.escapeHtml(text);
         }
     }
