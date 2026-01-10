@@ -10,6 +10,13 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Advanced PR filtering and sorting.
 - Branch rename operations.
 
+### [0.1.5] - 2026-01-11
+
+#### Changed
+
+- **Status bar icon**: now uses `$(account)` icon for better visual consistency with VS Code.
+- **Status bar color**: removed custom color to respect user's theme preferences.
+
 ### [0.1.4] - 2026-01-11
 
 #### Added

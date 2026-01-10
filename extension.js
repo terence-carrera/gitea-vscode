@@ -60,7 +60,8 @@ async function activate(context) {
         giteaStatusBar.name = 'Gitea Account';
         giteaStatusBar.tooltip = 'Click to Switch Gitea Profile/Account';
         // Brand color to help distinguish alongside other extensions
-        giteaStatusBar.color = '#43a047';
+        // Commented out to respect user themes
+        // giteaStatusBar.color = '#43a047';
 
         // Update status bar with current profile
         const updateStatusBar = () => {
@@ -822,7 +823,7 @@ async function activate(context) {
 
                     // Update status bar with new profile
                     const activeProfile = auth.activeProfile || 'default';
-                    giteaStatusBar.text = `$(person) Gitea: ${activeProfile}`;
+                    giteaStatusBar.text = `$(account) Gitea: ${activeProfile}`;
                 }
             } catch (error) {
                 console.error('Failed to add profile:', error);
@@ -851,7 +852,7 @@ async function activate(context) {
 
                     // Update status bar with new profile
                     const activeProfile = auth.activeProfile || 'default';
-                    giteaStatusBar.text = `$(person) Gitea: ${activeProfile}`;
+                    giteaStatusBar.text = `$(account) Gitea: ${activeProfile}`;
                 }
             } catch (error) {
                 console.error('Failed to switch profile:', error);
