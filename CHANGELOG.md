@@ -5,40 +5,42 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### [Unreleased]
 
-#### Added
-
-- **VS Code Settings Sync integration**: deletion history automatically syncs across machines when VS Code Settings Sync is enabled.
-- **Export deletion history**: save your deletion tracking data to JSON files for backup or transfer between machines.
-- **Import deletion history**: load deletion history from JSON files with merge or replace options.
-- **Visual diff preview before restoration**: review changed files and see detailed diffs before restoring a deleted branch.
-- **Interactive file diff viewer**: click on individual files in the preview to see side-by-side diffs.
-- **Enhanced branch details**: "Preview & Restore" option when viewing deleted branch details.
-- `gitea.exportDeletionHistory` command: export deletion history to a JSON file.
-- `gitea.importDeletionHistory` command: import deletion history from a JSON file.
-- **Deleted Branches view**: dedicated tree view showing all tracked deleted branches organized by repository.
-- **Persistent deletion tracking**: branch deletion history is now saved across VS Code sessions and survives restarts.
-- **Enhanced reflog parsing**: improved detection of branch deletions with support for multiple deletion patterns (standard delete, force delete, remote branch deletion, update-ref deletions).
-- **Configurable retention period**: set how long to keep deleted branch history with `gitea.branchDeletionRetentionDays` setting (default: 90 days).
-- **Deletion history timeline**: view when branches were deleted with human-readable timestamps (e.g., "2 days ago", "5 hours ago").
-- **Branch restoration from tree view**: restore deleted branches directly from the Deleted Branches view with inline restore button.
-- **Deletion source tracking**: identifies whether a branch was deleted through the extension or detected via reflog.
-- **History management commands**: remove individual entries or clear all deletion history.
-- Branch deletion with tracking: delete branches safely while tracking deletions for potential restoration.
-- Restore deleted branches: recover recently deleted branches from the extension's deletion history.
-- Restore branches from reflog: recover branches deleted outside the extension using Git's reflog.
-- `gitea.deleteBranch` command: delete branches with normal or force delete options.
-- `gitea.restoreDeletedBranch` command: restore recently deleted branches tracked by the extension.
-- `gitea.restoreBranchFromReflog` command: scan Git reflog to find and restore deleted branches.
-- `gitea.showDeletedBranchDetails` command: view detailed information about a deleted branch.
-- `gitea.restoreBranchFromTree` command: restore a branch directly from the tree view.
-- `gitea.removeFromHistory` command: remove a specific branch from deletion history.
-- `gitea.clearDeletionHistory` command: clear all tracked deletion history.
-- `gitea.refreshDeletedBranches` command: manually refresh the deleted branches view.
-
 #### Planned
 
 - Advanced PR filtering and sorting.
 - Branch rename operations.
+
+### [0.1.4] - 2026-01-11
+
+#### Added
+
+- **Branch deletion tracking & restoration**: comprehensive branch management system with deletion history and recovery capabilities.
+- **Deleted Branches view**: dedicated tree view showing all tracked deleted branches organized by repository with timestamps.
+- **Persistent deletion tracking**: branch deletion history saved across VS Code sessions using globalState storage.
+- **VS Code Settings Sync integration**: deletion history automatically syncs across all machines when VS Code Settings Sync is enabled - no external services required.
+- **Enhanced reflog parsing**: improved detection of branch deletions with support for multiple deletion patterns (standard delete, force delete, remote branch deletion, update-ref deletions).
+- **Visual diff preview before restoration**: review changed files and see detailed diffs before restoring a deleted branch.
+- **Interactive file diff viewer**: click on individual files in the preview to see side-by-side diffs.
+- **Export/import deletion history**: save deletion tracking data to JSON files for backup, archival, or transfer between machines.
+- **Configurable retention period**: set how long to keep deleted branch history with `gitea.branchDeletionRetentionDays` setting (1-365 days, default: 90 days).
+- **Deletion history timeline**: view when branches were deleted with human-readable relative timestamps (e.g., "2 days ago", "5 hours ago").
+- **Deletion source tracking**: identifies whether a branch was deleted through the extension or detected via Git reflog.
+- Commands:
+  - `gitea.deleteBranch`: delete branches with normal or force delete options while tracking the deletion.
+  - `gitea.restoreDeletedBranch`: restore recently deleted branches from the extension's tracked history.
+  - `gitea.restoreBranchFromReflog`: scan Git reflog to find and restore branches deleted outside the extension.
+  - `gitea.showDeletedBranchDetails`: view detailed information about a deleted branch with preview & restore options.
+  - `gitea.restoreBranchFromTree`: restore a branch directly from the Deleted Branches tree view.
+  - `gitea.removeFromHistory`: remove a specific branch from deletion history.
+  - `gitea.clearDeletionHistory`: clear all tracked deletion history.
+  - `gitea.refreshDeletedBranches`: manually refresh the deleted branches view.
+  - `gitea.exportDeletionHistory`: export deletion history to a JSON file.
+  - `gitea.importDeletionHistory`: import deletion history from a JSON file with merge or replace strategies.
+
+#### Changed
+
+- Branch deletion now automatically tracks deletions for potential restoration.
+- Deletion history persists across VS Code restarts and syncs via Settings Sync when enabled.
 
 ### [0.1.3] - 2026-01-10
 
