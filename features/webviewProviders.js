@@ -1,4 +1,5 @@
 const vscode = require('vscode');
+const { marked } = require('marked');
 
 class PullRequestWebviewProvider {
     constructor(auth) {
@@ -19,14 +20,75 @@ class PullRequestWebviewProvider {
 
             // Fetch PR details
             const [owner, repo] = repository.split('/');
-            let prDetails, comments, reviews;
+            let prDetails, comments, reviews, files, commitsList, diffContent, conflictingFiles = [], compareInfo = null;
 
             try {
-                [prDetails, comments, reviews] = await Promise.all([
+                [prDetails, comments, reviews, files, commitsList] = await Promise.all([
                     this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}`),
                     this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/issues/${prNumber}/comments`),
-                    this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}/reviews`).catch(() => [])
+                    this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}/reviews`).catch(() => []),
+                    this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}/files`).catch(() => []),
+                    this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}/commits`).catch(() => [])
                 ]);
+
+                // Determine if branch is behind base (out-of-date)
+                try {
+                    const baseRef = encodeURIComponent(prDetails.base?.ref || '');
+                    const headRef = encodeURIComponent(prDetails.head?.ref || '');
+                    if (baseRef && headRef) {
+                        compareInfo = await this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/compare/${baseRef}...${headRef}`)
+                            .catch(() => null);
+                    }
+                } catch (e) {
+                    void (e);
+                    compareInfo = null;
+                }
+
+                // If PR has conflicts, identify conflicting files
+                if (prDetails.mergeable === false && files && files.length > 0) {
+                    // Files with conflicts have the standard merge conflict markers:
+                    // <<<<<<< HEAD (or current branch)
+                    // =======
+                    // >>>>>>> origin/branch (or incoming branch)
+                    conflictingFiles = files.filter(file => {
+                        if (file.status === 'conflicted') {
+                            return true;
+                        }
+                        
+                        // Check for presence of all three conflict markers in the patch
+                        if (file.patch) {
+                            const hasConflictStart = /^<{7} /m.test(file.patch);  // <<<<<<< (7 chars + space)
+                            const hasConflictSeparator = /^={7}$/m.test(file.patch);  // ======= (7 chars exactly)
+                            const hasConflictEnd = /^>{7} /m.test(file.patch);  // >>>>>>> (7 chars + space)
+                            
+                            return hasConflictStart && hasConflictSeparator && hasConflictEnd;
+                        }
+                        
+                        return false;
+                    });
+                    
+                    // Do NOT fall back to all files; if we cannot determine specifics,
+                    // leave the list empty and show a generic guidance message in the UI.
+                }
+
+                // Some Gitea endpoints don't return commit count; fall back to commits list length
+                prDetails.commits = typeof prDetails.commits === 'number'
+                    ? prDetails.commits
+                    : (Array.isArray(commitsList) ? commitsList.length : 0);
+
+                // Fetch the actual diff content
+                try {
+                    diffContent = await this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}.diff`, {
+                        headers: { 'Accept': 'text/plain' }
+                    });
+
+                    // Parse diff and attach to files
+                    if (typeof diffContent === 'string') {
+                        files = this.parseDiffToFiles(files, diffContent);
+                    }
+                } catch (diffError) {
+                    console.error('Failed to fetch diff:', diffError);
+                }
             } catch (error) {
                 vscode.window.showErrorMessage(`Failed to load PR #${prNumber}: ${error.message}`);
                 return;
@@ -66,8 +128,16 @@ class PullRequestWebviewProvider {
                             case 'closePR':
                                 await this.closePullRequest(owner, repo, prNumber);
                                 break;
+                            case 'createBranch':
+                                vscode.commands.executeCommand('gitea.createBranchFromPR', {
+                                    metadata: { repository: `${owner}/${repo}`, number: prNumber }
+                                });
+                                break;
                             case 'openInBrowser':
                                 vscode.env.openExternal(vscode.Uri.parse(prDetails.html_url));
+                                break;
+                            case 'updateBranch':
+                                await this.updatePullRequestBranch(owner, repo, prNumber, message.style || 'merge');
                                 break;
                         }
                     } catch (error) {
@@ -77,7 +147,7 @@ class PullRequestWebviewProvider {
                 }
             );
 
-            panel.webview.html = this.getPullRequestHtml(panel.webview, prDetails, comments, reviews);
+            panel.webview.html = this.getPullRequestHtml(panel.webview, prDetails, comments, reviews, files, commitsList, conflictingFiles, compareInfo);
         } catch (error) {
             console.error('Failed to show pull request:', error);
             vscode.window.showErrorMessage(`Failed to show pull request: ${error.message}`);
@@ -137,10 +207,38 @@ class PullRequestWebviewProvider {
         }
     }
 
-    getPullRequestHtml(webview, pr, comments, reviews) {
+    async updatePullRequestBranch(owner, repo, prNumber, style = 'merge') {
+        try {
+            // Preferred Gitea endpoint to update a PR's branch by merging base into head
+            try {
+                await this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}/update`, {
+                    method: 'POST',
+                    body: { style }
+                });
+            } catch (firstErr) {
+                void (firstErr);
+                // Fallback: some instances might expect a different casing/key
+                await this.auth.makeRequest(`/api/v1/repos/${owner}/${repo}/pulls/${prNumber}/update`, {
+                    method: 'POST',
+                    body: { Style: style }
+                });
+            }
+
+            vscode.window.showInformationMessage('Branch updated from base via merge');
+            await this.showPullRequest(prNumber, `${owner}/${repo}`);
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to update branch: ${error.message}`);
+        }
+    }
+
+    getPullRequestHtml(webview, pr, comments, reviews, files = [], commits = [], conflictingFiles = [], compareInfo = null) {
         const stateColor = pr.state === 'open' ? '#3fb950' : pr.merged ? '#8957e5' : '#f85149';
         const stateIcon = pr.state === 'open' ? '●' : pr.merged ? '✓' : '×';
         const stateText = pr.state === 'open' ? 'Open' : pr.merged ? 'Merged' : 'Closed';
+        const behindCount = compareInfo
+            ? (Number(compareInfo.behind_by) || Number(compareInfo.behind) || Number(compareInfo.behindBy) || 0)
+            : 0;
+        const isOutOfDate = behindCount > 0;
 
         return `<!DOCTYPE html>
 <html>
@@ -196,7 +294,7 @@ class PullRequestWebviewProvider {
             border-left: 4px solid var(--vscode-textBlockQuote-border);
             padding: 12px 16px;
             margin: 12px 0;
-            white-space: pre-wrap;
+            border-radius: 4px;
         }
         .comment {
             background-color: var(--vscode-editor-background);
@@ -204,6 +302,7 @@ class PullRequestWebviewProvider {
             border-radius: 6px;
             padding: 12px;
             margin-bottom: 12px;
+            border-radius: 4px;
         }
         .comment-header {
             display: flex;
@@ -219,7 +318,6 @@ class PullRequestWebviewProvider {
             color: var(--vscode-descriptionForeground);
         }
         .comment-body {
-            white-space: pre-wrap;
             line-height: 1.5;
         }
         .review {
@@ -302,10 +400,146 @@ class PullRequestWebviewProvider {
         }
         .actions {
             display: flex;
+            flex-direction: row;
+            align-items: center;
             gap: 8px;
             margin-top: 16px;
             padding-top: 16px;
             border-top: 1px solid var(--vscode-panel-border);
+        }
+        .markdown-body {
+            line-height: 1.7;
+        }
+        .markdown-body > *:first-child {
+            margin-top: 0 !important;
+        }
+        .markdown-body > *:last-child {
+            margin-bottom: 0 !important;
+        }
+        .markdown-body h1, .markdown-body h2, .markdown-body h3, 
+        .markdown-body h4, .markdown-body h5, .markdown-body h6 {
+            margin-top: 20px;
+            margin-bottom: 12px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        .markdown-body h1 { font-size: 1.8em; border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 0.3em; margin-top: 0; }
+        .markdown-body h2 { font-size: 1.4em; border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 0.3em; }
+        .markdown-body h3 { font-size: 1.2em; }
+        .markdown-body h4 { font-size: 1.1em; }
+        .markdown-body p {
+            margin-top: 0;
+            margin-bottom: 12px;
+        }
+        .markdown-body code {
+            background-color: var(--vscode-textCodeBlock-background);
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: var(--vscode-editor-font-family);
+            font-size: 0.85em;
+        }
+        .markdown-body pre {
+            background-color: var(--vscode-textCodeBlock-background);
+            padding: 12px;
+            overflow: auto;
+            border-radius: 6px;
+            line-height: 1.5;
+            margin: 12px 0;
+        }
+        .markdown-body pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+        .markdown-body blockquote {
+            border-left: 4px solid var(--vscode-textBlockQuote-border);
+            padding-left: 16px;
+            color: var(--vscode-descriptionForeground);
+            margin: 12px 0;
+        }
+        .markdown-body ul, .markdown-body ol {
+            padding-left: 2em;
+            margin: 8px 0 12px 0;
+        }
+        .markdown-body li {
+            margin-top: 4px;
+        }
+        .markdown-body a {
+            color: var(--vscode-textLink-foreground);
+            text-decoration: none;
+        }
+        .markdown-body a:hover {
+            text-decoration: underline;
+        }
+        .files-container {
+            margin-top: 12px;
+        }
+        .file-item {
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 6px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+        .file-header {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            background-color: var(--vscode-editor-background);
+            cursor: pointer;
+            user-select: none;
+        }
+        .file-header:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+        .file-icon {
+            margin-right: 8px;
+            font-size: 16px;
+        }
+        .file-name {
+            flex: 1;
+            padding-top: 1px;
+            font-family: var(--vscode-editor-font-family);
+            font-size: 13px;
+        }
+        .file-stats {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            font-family: var(--vscode-editor-font-family);
+        }
+        .file-stats .additions {
+            color: #3fb950;
+        }
+        .file-stats .deletions {
+            color: #f85149;
+        }
+        .file-diff {
+            background-color: var(--vscode-textCodeBlock-background);
+            padding: 12px;
+            font-family: var(--vscode-editor-font-family);
+            font-size: 12px;
+            line-height: 1.5;
+            overflow-x: auto;
+        }
+        .diff-line {
+            display: block;
+            white-space: pre;
+            padding: 0 8px;
+        }
+        .diff-line.addition {
+            background-color: rgba(63, 185, 80, 0.15);
+            color: var(--vscode-foreground);
+        }
+        .diff-line.deletion {
+            background-color: rgba(248, 81, 73, 0.15);
+            color: var(--vscode-foreground);
+        }
+        .diff-line.context {
+            color: var(--vscode-descriptionForeground);
+        }
+        .diff-line.header {
+            color: var(--vscode-textLink-foreground);
+            font-weight: 600;
+            background-color: var(--vscode-editor-background);
         }
     </style>
 </head>
@@ -323,6 +557,21 @@ class PullRequestWebviewProvider {
             • Created ${new Date(pr.created_at).toLocaleString()}
         </div>
     </div>
+
+    ${isOutOfDate ? `
+    <div class="section">
+        <div style="display:flex; align-items:flex-start; padding: 12px; background-color: rgba(255, 193, 7, 0.1); border: 1px solid var(--vscode-panel-border); border-left: 4px solid #d29922; border-radius: 6px;">
+            <div style="margin-right: 12px; color: #d29922;">⚠</div>
+            <div style="flex:1;">
+                <div style="font-weight:600; margin-bottom:6px;">This pull request is blocked because it's outdated.</div>
+                <div style="color: var(--vscode-descriptionForeground); margin-bottom: 10px;">This branch is out-of-date with the base branch${behindCount ? ` (behind by ${behindCount} commit${behindCount > 1 ? 's' : ''})` : ''}.</div>
+                <div>
+                    <button class="secondary" onclick="updateBranch('merge')">Update branch by merge</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    ` : ''}
 
     <div class="info-grid">
         <div class="info-item">
@@ -345,24 +594,53 @@ class PullRequestWebviewProvider {
 
     ${pr.body ? `
     <div class="section">
-        <div class="section-title">Description</div>
-        <div class="description">${this.escapeHtml(pr.body)}</div>
+        <!-- <div class="section-title">Description</div> -->
+        <div class="description markdown-body">${this.renderMarkdown(pr.body)}</div>
     </div>
     ` : ''}
 
-    ${reviews && reviews.length > 0 ? `
+    ${commits && commits.length > 0 ? `
     <div class="section">
-        <div class="section-title">Reviews (${reviews.length})</div>
-        ${reviews.map(review => `
-            <div class="review review-${review.state?.toLowerCase()}">
+        <div class="section-title">Commits (${commits.length})</div>
+        ${commits.map(commit => `
+            <div class="comment">
                 <div class="comment-header">
-                    <span class="comment-author">${review.user?.login || 'Unknown'}</span>
-                    <span class="comment-date">${new Date(review.submitted_at).toLocaleString()}</span>
+                    <span class="comment-author">${commit.commit?.author?.name || commit.author?.login || 'Unknown'}</span>
+                    <span class="comment-date">${new Date(commit.commit?.author?.date || commit.created_at).toLocaleString()}</span>
                 </div>
-                <div><strong>${review.state || 'COMMENTED'}</strong></div>
-                ${review.body ? `<div class="comment-body">${this.escapeHtml(review.body)}</div>` : ''}
+                <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: start; margin-bottom: 8px; width: 100%;">
+                    <div class="comment-body">${this.escapeHtml(commit.commit?.message || commit.message || 'No message')}</div>
+                    <code style="background-color: var(--vscode-textCodeBlock-background); padding: 2px 6px; border-radius: 3px; font-family: var(--vscode-editor-font-family); font-size: 12px;">${commit.sha?.substring(0, 7) || 'unknown'}</code>
+                </div>
             </div>
         `).join('')}
+    </div>
+    ` : ''}
+
+    ${files && files.length > 0 ? `
+    <div class="section">
+        <div class="section-title">Files Changed (${files.length})</div>
+        <div class="files-container">
+            ${files.map((file, index) => {
+                const wordStatus = this.getFileStatus(file);
+                const iconStatus = this.getFileIcon(wordStatus);
+                return `
+                <div class="file-item">
+                    <div class="file-header" onclick="toggleFile(${index})">
+                        <span class="file-icon">${iconStatus}</span>
+                        <span class="file-name">${this.escapeHtml(file.filename)}</span>
+                        <span class="file-stats">
+                            <span class="additions">+${file.additions || 0}</span>
+                            <span class="deletions">-${file.deletions || 0}</span>
+                        </span>
+                    </div>
+                    <div class="file-diff" id="file-${index}" style="display: none;">
+                        ${file.patch ? this.renderDiff(file.patch) : '<p>No diff available</p>'}
+                    </div>
+                </div>
+                `;
+            }).join('')}
+        </div>
     </div>
     ` : ''}
 
@@ -374,7 +652,7 @@ class PullRequestWebviewProvider {
                     <span class="comment-author">${comment.user?.login || 'Unknown'}</span>
                     <span class="comment-date">${new Date(comment.created_at).toLocaleString()}</span>
                 </div>
-                <div class="comment-body">${this.escapeHtml(comment.body || '')}</div>
+                <div class="comment-body markdown-body">${this.renderMarkdown(comment.body || '')}</div>
             </div>
         `).join('') : '<p>No comments yet.</p>'}
         
@@ -385,6 +663,22 @@ class PullRequestWebviewProvider {
             </div>
         </div>
     </div>
+
+    ${reviews && reviews.length > 0 ? `
+    <div class="section">
+        <div class="section-title">Reviews (${reviews.length})</div>
+        ${reviews.map(review => `
+            <div class="review review-${review.state?.toLowerCase()}">
+                <div class="comment-header">
+                    <span class="comment-author">${review.user?.login || 'Unknown'}</span>
+                    <span class="comment-date">${new Date(review.submitted_at).toLocaleString()}</span>
+                </div>
+                <div><strong>${review.state || 'COMMENTED'}</strong></div>
+                ${review.body ? `<div class="comment-body markdown-body">${this.renderMarkdown(review.body)}</div>` : ''}
+            </div>
+        `).join('')}
+    </div>
+    ` : ''}
 
     ${pr.state === 'open' ? `
     <div class="section">
@@ -402,12 +696,31 @@ class PullRequestWebviewProvider {
             <button class="success" onclick="mergePR('merge')">Merge Pull Request</button>
             <button class="secondary" onclick="mergePR('squash')">Squash and Merge</button>
             <button class="secondary" onclick="mergePR('rebase')">Rebase and Merge</button>
-        ` : '<p style="color: var(--vscode-errorForeground);">This PR has conflicts and cannot be merged.</p>'}
-        <button class="danger" onclick="closePR()">Close PR</button>
-        <button class="secondary" onclick="openInBrowser()">Open in Browser</button>
+            <button class="danger" onclick="closePR()">Close PR</button>
+            <button class="secondary" onclick="createBranch()">Create Branch</button>
+            <button class="secondary" onclick="openInBrowser()">Open in Browser</button>
+        ` : `
+            <div style="width: 100%;">
+                <div style="display: flex; align-items: center; padding: 12px; background-color: rgba(248, 81, 73, 0.1); border: 1px solid #f85149; border-radius: 6px; margin-bottom: 16px;">
+                    <span style="font-size: 20px; margin-right: 12px;">✕</span>
+                    <div>
+                        <div style="font-weight: 600; color: var(--vscode-errorForeground); margin-bottom: 4px;">This pull request has changes conflicting with the target branch.</div>
+                        ${conflictingFiles.length > 0 ? `
+                            <ul style="margin: 8px 0 0 0; padding-left: 20px; color: var(--vscode-descriptionForeground);">
+                                ${conflictingFiles.map(file => `<li style=\"font-family: var(--vscode-editor-font-family); font-size: 13px;\">${this.escapeHtml(file.filename)}</li>`).join('')}
+                            </ul>
+                        ` : `<div style="color: var(--vscode-descriptionForeground);">Conflicts detected, but the API did not identify specific files. Check the PR on your server or attempt a local merge for exact paths.</div>`}
+                    </div>
+                </div>
+                <button class="danger" onclick="closePR()">Close PR</button>
+                <button class="secondary" onclick="createBranch()">Create Branch</button>
+                <button class="secondary" onclick="openInBrowser()">Open in Browser</button>
+            </div>
+        `}
     </div>
     ` : `
     <div class="actions">
+        <button class="secondary" onclick="createBranch()">Create Branch</button>
         <button class="secondary" onclick="openInBrowser()">Open in Browser</button>
     </div>
     `}
@@ -442,6 +755,14 @@ class PullRequestWebviewProvider {
             });
         }
 
+        function createBranch() {
+            vscode.postMessage({ command: 'createBranch' });
+        }
+
+        function updateBranch(style) {
+            vscode.postMessage({ command: 'updateBranch', style });
+        }
+
         function showConfirmation(title, message, onConfirm) {
             const modal = document.createElement('div');
             modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;';
@@ -470,6 +791,17 @@ class PullRequestWebviewProvider {
         function openInBrowser() {
             vscode.postMessage({ command: 'openInBrowser' });
         }
+
+        function toggleFile(index) {
+            const fileDiv = document.getElementById('file-' + index);
+            if (fileDiv) {
+                if (fileDiv.style.display === 'none') {
+                    fileDiv.style.display = 'block';
+                } else {
+                    fileDiv.style.display = 'none';
+                }
+            }
+        }
     </script>
 </body>
 </html>`;
@@ -483,6 +815,130 @@ class PullRequestWebviewProvider {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    renderMarkdown(text) {
+        if (!text) return '';
+        try {
+            return marked.parse(text);
+        } catch (error) {
+            void (error);
+            return this.escapeHtml(text);
+        }
+    }
+
+    renderDiff(patch) {
+        if (!patch) return '';
+        const lines = patch.split('\n');
+        return lines.map(line => {
+            let className = 'context';
+            if (line.startsWith('+')) className = 'addition';
+            else if (line.startsWith('-')) className = 'deletion';
+            else if (line.startsWith('@@')) className = 'header';
+
+            return `<span class="diff-line ${className}">${this.escapeHtml(line)}</span>`;
+        }).join('');
+    }
+
+    getFileStatus(file) {
+        // Check if status is provided by API
+        if (file.status) {
+            return file.status;
+        }
+
+        // Determine status from file properties
+        if (file.previous_filename || file.old_name) {
+            return 'renamed';
+        }
+
+        // Check additions and deletions
+        const additions = file.additions || 0;
+        const deletions = file.deletions || 0;
+
+        if (additions > 0 && deletions === 0) {
+            return 'added';
+        }
+
+        if (additions === 0 && deletions > 0) {
+            return 'deleted';
+        }
+
+        if (additions > 0 || deletions > 0) {
+            return 'modified';
+        }
+
+        return 'modified'; // Default
+    }
+
+    getFileIcon(status) {
+        switch (status) {
+            case 'added': return '✚';
+            case 'modified': return '✎';
+            case 'deleted': return '✖';
+            case 'renamed': return '➜';
+            default: return '✎';
+        }
+    }
+
+    parseDiffToFiles(files, diffContent) {
+        if (!diffContent || !files) return files;
+
+        // Parse the unified diff format
+        const fileDiffs = {};
+        const diffBlocks = diffContent.split(/\ndiff --git /);
+
+        for (let i = 0; i < diffBlocks.length; i++) {
+            const block = diffBlocks[i];
+            if (!block.trim()) continue;
+
+            // For the first block, it might not have the leading "diff --git"
+            const fullBlock = i === 0 && !block.startsWith('a/') ? block : 'a/' + block;
+
+            // Extract filename - try multiple patterns
+            let filename = null;
+
+            // Pattern 1: standard diff --git a/file b/file
+            let fileMatch = fullBlock.match(/^a\/(.+?) b\/(.+?)$/m);
+            if (fileMatch) {
+                filename = fileMatch[2];
+            } else {
+                // Pattern 2: try to find +++ b/filename
+                fileMatch = fullBlock.match(/^\+\+\+ b\/(.+?)$/m);
+                if (fileMatch) {
+                    filename = fileMatch[1];
+                }
+            }
+
+            if (!filename) continue;
+
+            // Extract the actual diff content (everything from the first @@ to the end)
+            const lines = fullBlock.split('\n');
+            const diffStartIndex = lines.findIndex(line => line.startsWith('@@'));
+
+            if (diffStartIndex !== -1) {
+                const patchContent = lines.slice(diffStartIndex).join('\n');
+                fileDiffs[filename] = patchContent;
+            } else {
+                // If no @@ found, the file might be new or binary
+                // Try to capture everything after the +++ line
+                const plusIndex = lines.findIndex(line => line.startsWith('+++'));
+                if (plusIndex !== -1 && plusIndex < lines.length - 1) {
+                    const patchContent = lines.slice(plusIndex + 1).join('\n');
+                    if (patchContent.trim()) {
+                        fileDiffs[filename] = patchContent;
+                    }
+                }
+            }
+        }
+
+        // Attach patches to files
+        return files.map(file => {
+            const patch = fileDiffs[file.filename] || file.patch || '';
+            return {
+                ...file,
+                patch: patch
+            };
+        });
     }
 }
 
@@ -545,6 +1001,11 @@ class IssueWebviewProvider {
                             case 'reopenIssue':
                                 await this.reopenIssue(owner, repo, issueNumber);
                                 panel.dispose();
+                                break;
+                            case 'createBranch':
+                                vscode.commands.executeCommand('gitea.createBranchFromIssue', {
+                                    metadata: { repository: `${owner}/${repo}`, number: issueNumber }
+                                });
                                 break;
                             case 'openInBrowser':
                                 vscode.env.openExternal(vscode.Uri.parse(issueDetails.html_url));
@@ -660,7 +1121,7 @@ class IssueWebviewProvider {
             border-left: 4px solid var(--vscode-textBlockQuote-border);
             padding: 12px 16px;
             margin: 12px 0;
-            white-space: pre-wrap;
+            border-radius: 4px;
         }
         .comment {
             background-color: var(--vscode-editor-background);
@@ -668,6 +1129,7 @@ class IssueWebviewProvider {
             border-radius: 6px;
             padding: 12px;
             margin-bottom: 12px;
+            border-radius: 4px;
         }
         .comment-header {
             display: flex;
@@ -683,7 +1145,6 @@ class IssueWebviewProvider {
             color: var(--vscode-descriptionForeground);
         }
         .comment-body {
-            white-space: pre-wrap;
             line-height: 1.5;
         }
         .labels {
@@ -745,10 +1206,75 @@ class IssueWebviewProvider {
         }
         .actions {
             display: flex;
+            flex-direction: row;
+            align-items: center;
             gap: 8px;
             margin-top: 16px;
             padding-top: 16px;
             border-top: 1px solid var(--vscode-panel-border);
+        }
+        .markdown-body {
+            line-height: 1.7;
+        }
+        .markdown-body > *:first-child {
+            margin-top: 0 !important;
+        }
+        .markdown-body > *:last-child {
+            margin-bottom: 0 !important;
+        }
+        .markdown-body h1, .markdown-body h2, .markdown-body h3, 
+        .markdown-body h4, .markdown-body h5, .markdown-body h6 {
+            margin-top: 20px;
+            margin-bottom: 12px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        .markdown-body h1 { font-size: 1.8em; border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 0.3em; margin-top: 0; }
+        .markdown-body h2 { font-size: 1.4em; border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 0.3em; }
+        .markdown-body h3 { font-size: 1.2em; }
+        .markdown-body h4 { font-size: 1.1em; }
+        .markdown-body p {
+            margin-top: 0;
+            margin-bottom: 12px;
+        }
+        .markdown-body code {
+            background-color: var(--vscode-textCodeBlock-background);
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: var(--vscode-editor-font-family);
+            font-size: 0.85em;
+        }
+        .markdown-body pre {
+            background-color: var(--vscode-textCodeBlock-background);
+            padding: 12px;
+            overflow: auto;
+            border-radius: 6px;
+            line-height: 1.5;
+            margin: 12px 0;
+        }
+        .markdown-body pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+        .markdown-body blockquote {
+            border-left: 4px solid var(--vscode-textBlockQuote-border);
+            padding-left: 16px;
+            color: var(--vscode-descriptionForeground);
+            margin: 12px 0;
+        }
+        .markdown-body ul, .markdown-body ol {
+            padding-left: 2em;
+            margin: 8px 0 12px 0;
+        }
+        .markdown-body li {
+            margin-top: 4px;
+        }
+        .markdown-body a {
+            color: var(--vscode-textLink-foreground);
+            text-decoration: none;
+        }
+        .markdown-body a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -777,7 +1303,7 @@ class IssueWebviewProvider {
     ${issue.body ? `
     <div class="section">
         <div class="section-title">Description</div>
-        <div class="description">${this.escapeHtml(issue.body)}</div>
+        <div class="description markdown-body">${this.renderMarkdown(issue.body)}</div>
     </div>
     ` : ''}
 
@@ -789,7 +1315,7 @@ class IssueWebviewProvider {
                     <span class="comment-author">${comment.user?.login || 'Unknown'}</span>
                     <span class="comment-date">${new Date(comment.created_at).toLocaleString()}</span>
                 </div>
-                <div class="comment-body">${this.escapeHtml(comment.body || '')}</div>
+                <div class="comment-body markdown-body">${this.renderMarkdown(comment.body || '')}</div>
             </div>
         `).join('') : '<p>No comments yet.</p>'}
         
@@ -806,6 +1332,7 @@ class IssueWebviewProvider {
                 ? '<button class="danger" onclick="closeIssue()">Close Issue</button>'
                 : '<button class="success" onclick="reopenIssue()">Reopen Issue</button>'
             }
+        <button class="secondary" onclick="createBranch()">Create Branch</button>
         <button class="secondary" onclick="openInBrowser()">Open in Browser</button>
     </div>
 
@@ -829,6 +1356,10 @@ class IssueWebviewProvider {
 
         function reopenIssue() {
             vscode.postMessage({ command: 'reopenIssue' });
+        }
+
+        function createBranch() {
+            vscode.postMessage({ command: 'createBranch' });
         }
 
         function showConfirmation(title, message, onConfirm) {
@@ -887,6 +1418,16 @@ class IssueWebviewProvider {
         } catch (error) {
             console.error('Failed to calculate contrast color:', error);
             return '#000000';
+        }
+    }
+
+    renderMarkdown(text) {
+        if (!text) return '';
+        try {
+            return marked.parse(text);
+        } catch (error) {
+            void (error);
+            return this.escapeHtml(text);
         }
     }
 
@@ -1436,3 +1977,4 @@ module.exports = {
     IssueWebviewProvider,
     PullRequestCreationProvider
 };
+

@@ -4,6 +4,9 @@ const GiteaAuth = require('./features/auth');
 const { RepositoryProvider, IssueProvider, PullRequestProvider } = require('./features/treeProviders');
 const { PullRequestWebviewProvider, IssueWebviewProvider, PullRequestCreationProvider } = require('./features/webviewProviders');
 const NotificationManager = require('./features/notifications');
+const BranchManager = require('./features/branches');
+const StashManager = require('./features/stash');
+const { debounce, throttle } = require('./features/performanceOptimizer');
 
 /**
  * @param {vscode.ExtensionContext} context
@@ -26,8 +29,48 @@ async function activate(context) {
         const issueWebviewProvider = new IssueWebviewProvider(auth);
         const prCreationProvider = new PullRequestCreationProvider(auth);
 
-        // Initialize notification manager
-        const notificationManager = new NotificationManager(auth);
+        // Lazy-initialize notification manager (defer to reduce startup time)
+        let notificationManager;
+        const getNotificationManager = () => {
+            if (!notificationManager) {
+                notificationManager = new NotificationManager(auth);
+            }
+            return notificationManager;
+        };
+
+        // Initialize branch manager
+        const branchManager = new BranchManager(auth);
+
+        // Throttle refresh operations to prevent excessive API calls
+        const throttledRefresh = throttle(() => {
+            repositoryProvider.refresh();
+            issueProvider.refresh();
+            pullRequestProvider.refresh();
+        }, 1000);
+
+        // Create status bar item to show current Gitea account
+        const giteaStatusBar = vscode.window.createStatusBarItem(
+            vscode.StatusBarAlignment.Left,
+            1000 // High priority to position on the left
+        );
+        giteaStatusBar.name = 'Gitea Account';
+        giteaStatusBar.tooltip = 'Click to Switch Gitea Profile/Account';
+        // Brand color to help distinguish alongside other extensions
+        giteaStatusBar.color = '#43a047';
+
+        // Update status bar with current profile
+        const updateStatusBar = () => {
+            const activeProfile = auth.activeProfile || 'default';
+            giteaStatusBar.text = `$(account) Gitea: ${activeProfile}`;
+            giteaStatusBar.command = 'gitea.switchProfile';
+            giteaStatusBar.show();
+        };
+
+        // Initial status bar update
+        updateStatusBar();
+
+        // Dispose status bar when extension deactivates
+        context.subscriptions.push(giteaStatusBar);
 
     // Register tree views
     const repositoryTreeView = vscode.window.createTreeView('gitea.repositories', {
@@ -166,7 +209,7 @@ async function activate(context) {
                 vscode.window.showWarningMessage('Gitea is not configured. Please configure first.');
                 return;
             }
-            await notificationManager.toggleMonitoring();
+            await getNotificationManager().toggleMonitoring();
         } catch (error) {
             console.error('Failed to toggle notifications:', error);
             vscode.window.showErrorMessage(`Failed to toggle notifications: ${error.message}`);
@@ -176,7 +219,7 @@ async function activate(context) {
     // Get notification status command
     const notificationStatusCommand = vscode.commands.registerCommand('gitea.notificationStatus', () => {
         try {
-            const status = notificationManager.getStatus();
+            const status = getNotificationManager().getStatus();
             const message = status.isMonitoring
                 ? `Notifications enabled (polling every ${status.pollInterval / 1000}s)`
                 : 'Notifications disabled';
@@ -241,7 +284,11 @@ async function activate(context) {
                 placeHolder: 'Enter description...'
             });
 
-            await auth.makeRequest('/api/v1/admin/users/gitea_admin/repos', {
+            const endpoint = selectedOrg 
+                ? `/api/v1/orgs/${selectedOrg.username}/repos`
+                : '/api/v1/user/repos';
+            
+            await auth.makeRequest(endpoint, {
                 method: 'POST',
                 body: {
                     name: repoName,
@@ -429,6 +476,138 @@ async function activate(context) {
         }
     });
 
+    // Switch branch command
+    const switchBranchCommand = vscode.commands.registerCommand('gitea.switchBranch', async (item) => {
+        try {
+            let repoName;
+            
+            // Get repo name from tree item if available
+            if (item && item.metadata && item.metadata.repository) {
+                repoName = item.metadata.repository;
+            } else if (item && item.repository && item.repository.full_name) {
+                repoName = item.repository.full_name;
+            } else {
+                // Prompt user to select repository
+                const repos = await auth.makeRequest('/api/v1/user/repos');
+                const workspaceRepos = repositoryProvider.filterRepositoriesByWorkspace(repos || []);
+                
+                if (workspaceRepos.length === 0) {
+                    vscode.window.showWarningMessage('No repositories found in workspace.');
+                    return;
+                }
+                
+                const selected = await vscode.window.showQuickPick(
+                    workspaceRepos.map(r => ({ label: r.name, value: r.full_name })),
+                    { placeHolder: 'Select repository' }
+                );
+                
+                if (!selected) return;
+                repoName = selected.value;
+            }
+            
+            await branchManager.switchBranch(repoName);
+        } catch (error) {
+            console.error('Failed to switch branch:', error);
+            vscode.window.showErrorMessage(`Failed to switch branch: ${error.message}`);
+        }
+    });
+
+    // Create branch from issue command
+    const createBranchFromIssueCommand = vscode.commands.registerCommand('gitea.createBranchFromIssue', async (treeItem) => {
+        try {
+            if (!treeItem || !treeItem.metadata) {
+                vscode.window.showErrorMessage('No issue selected');
+                return;
+            }
+            
+            const repoName = treeItem.metadata.repository;
+            const issueNumber = treeItem.metadata.number;
+            
+            await branchManager.createBranchFromIssue(repoName, issueNumber);
+        } catch (error) {
+            console.error('Failed to create branch from issue:', error);
+            vscode.window.showErrorMessage(`Failed to create branch from issue: ${error.message}`);
+        }
+    });
+
+    // Create branch from pull request command
+    const createBranchFromPRCommand = vscode.commands.registerCommand('gitea.createBranchFromPR', async (treeItem) => {
+        try {
+            if (!treeItem || !treeItem.metadata) {
+                vscode.window.showErrorMessage('No pull request selected');
+                return;
+            }
+            
+            const repoName = treeItem.metadata.repository;
+            const prNumber = treeItem.metadata.number;
+            
+            await branchManager.createBranchFromPullRequest(repoName, prNumber);
+        } catch (error) {
+            console.error('Failed to create branch from PR:', error);
+            vscode.window.showErrorMessage(`Failed to create branch from PR: ${error.message}`);
+        }
+    });
+
+        // Initialize stash manager
+        const stashManager = new StashManager();
+
+        // Add profile command
+        const addProfileCommand = vscode.commands.registerCommand('gitea.addProfile', async () => {
+            try {
+                const added = await auth.addProfile();
+                if (added) {
+                    auth.cache.clear();
+                    throttledRefresh();
+
+                    // Update status bar with new profile
+                    const activeProfile = auth.activeProfile || 'default';
+                    giteaStatusBar.text = `$(person) Gitea: ${activeProfile}`;
+                }
+            } catch (error) {
+                console.error('Failed to add profile:', error);
+                vscode.window.showErrorMessage(`Failed to add profile: ${error.message}`);
+            }
+        });
+
+        // Stash management command
+        const manageStashCommand = vscode.commands.registerCommand('gitea.manageStash', async () => {
+            try {
+                await stashManager.manageStashes();
+            } catch (error) {
+                console.error('Failed to manage stashes:', error);
+                vscode.window.showErrorMessage(`Failed to manage stashes: ${error.message}`);
+            }
+        });
+
+        // Switch profile command
+        const switchProfileCommand = vscode.commands.registerCommand('gitea.switchProfile', async () => {
+            try {
+                const switched = await auth.switchProfile();
+                if (switched) {
+                    // Clear cache to get fresh data from new account
+                    auth.cache.clear();
+                    throttledRefresh();
+
+                    // Update status bar with new profile
+                    const activeProfile = auth.activeProfile || 'default';
+                    giteaStatusBar.text = `$(person) Gitea: ${activeProfile}`;
+                }
+            } catch (error) {
+                console.error('Failed to switch profile:', error);
+                vscode.window.showErrorMessage(`Failed to switch profile: ${error.message}`);
+            }
+        });
+
+        // Remove profile command
+        const removeProfileCommand = vscode.commands.registerCommand('gitea.removeProfile', async () => {
+            try {
+                await auth.removeProfile();
+            } catch (error) {
+                console.error('Failed to remove profile:', error);
+                vscode.window.showErrorMessage(`Failed to remove profile: ${error.message}`);
+            }
+        });
+
     // Add all disposables to subscriptions
     context.subscriptions.push(
         repositoryTreeView,
@@ -444,6 +623,13 @@ async function activate(context) {
         createRepositoryCommand,
         createIssueCommand,
         createPullRequestCommand,
+        switchBranchCommand,
+        createBranchFromIssueCommand,
+        createBranchFromPRCommand,
+        addProfileCommand,
+        manageStashCommand,
+        switchProfileCommand,
+        removeProfileCommand,
         openRepositoryCommand,
         openInBrowserCommand,
         openIssueInBrowserCommand,
@@ -486,7 +672,12 @@ async function activate(context) {
         try {
             const config = vscode.workspace.getConfiguration('gitea');
             if (config.get('enableNotifications')) {
-                await notificationManager.startMonitoring();
+                // Defer notification startup to avoid blocking extension activation
+                setTimeout(() => {
+                    getNotificationManager().startMonitoring().catch(err => {
+                        console.error('Failed to start notifications:', err);
+                    });
+                }, 2000); // 2 second delay
             }
         } catch (error) {
             console.error('Failed to start notifications:', error);
@@ -498,7 +689,9 @@ async function activate(context) {
     context.subscriptions.push(
         new vscode.Disposable(() => {
             try {
-                notificationManager.stopMonitoring();
+                if (notificationManager) {
+                    notificationManager.stopMonitoring();
+                }
             } catch (error) {
                 console.error('Failed to stop notifications:', error);
             }
