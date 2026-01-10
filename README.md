@@ -4,6 +4,14 @@ Integrate Gitea into VS Code: browse repositories, track issues and pull request
 
 ### Features
 
+- **Branch Deletion Tracking & Restoration**: Comprehensive branch management with deletion history, visual diff previews, and automatic sync
+  - Track deleted branches across sessions with persistent storage
+  - Restore deleted branches from extension history or Git reflog
+  - Preview file changes before restoration with interactive diff viewer
+  - Export/import deletion history as JSON for portability
+  - Automatic sync across machines via VS Code Settings Sync
+  - Deleted Branches view with repository grouping and timestamps
+  - Configurable retention period (1-365 days) for automatic cleanup
 - Repositories view: lists only repositories present in your workspace (detected via local Git remotes).
 - Issues view: grouped by Repository → State (Open/Closed) → Items, with quick open-in-browser.
 - Pull Requests view: grouped by Repository → State (Open/WIP/Closed) → Items, with draft/WIP detection.

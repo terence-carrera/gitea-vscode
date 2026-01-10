@@ -117,6 +117,56 @@
                 "icon": "$(git-branch)"
             },
             {
+                "command": "gitea.deleteBranch",
+                "title": "Gitea: Delete Branch",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "gitea.restoreDeletedBranch",
+                "title": "Gitea: Restore Deleted Branch",
+                "icon": "$(discard)"
+            },
+            {
+                "command": "gitea.restoreBranchFromReflog",
+                "title": "Gitea: Restore Branch from Reflog",
+                "icon": "$(history)"
+            },
+            {
+                "command": "gitea.showDeletedBranchDetails",
+                "title": "Show Deleted Branch Details",
+                "icon": "$(info)"
+            },
+            {
+                "command": "gitea.restoreBranchFromTree",
+                "title": "Restore Branch",
+                "icon": "$(discard)"
+            },
+            {
+                "command": "gitea.removeFromHistory",
+                "title": "Remove from History",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "gitea.clearDeletionHistory",
+                "title": "Clear All Deletion History",
+                "icon": "$(clear-all)"
+            },
+            {
+                "command": "gitea.exportDeletionHistory",
+                "title": "Gitea: Export Deletion History",
+                "icon": "$(export)"
+            },
+            {
+                "command": "gitea.importDeletionHistory",
+                "title": "Gitea: Import Deletion History",
+                "icon": "$(import)"
+            },
+            {
+                "command": "gitea.refreshDeletedBranches",
+                "title": "Refresh Deleted Branches",
+                "icon": "$(refresh)"
+            },
+            {
                 "command": "gitea.addProfile",
                 "title": "Gitea: Add Profile",
                 "icon": "$(add)"
@@ -162,6 +212,11 @@
                     "id": "gitea.pullRequests",
                     "name": "Pull Requests",
                     "icon": "$(git-pull-request)"
+                },
+                {
+                    "id": "gitea.deletedBranches",
+                    "name": "Deleted Branches",
+                    "icon": "$(trash)"
                 }
             ]
         },
@@ -201,6 +256,31 @@
                     "command": "gitea.createPullRequest",
                     "when": "view == gitea.pullRequests",
                     "group": "navigation@2"
+                },
+                {
+                    "command": "gitea.refreshDeletedBranches",
+                    "when": "view == gitea.deletedBranches",
+                    "group": "navigation"
+                },
+                {
+                    "command": "gitea.restoreBranchFromReflog",
+                    "when": "view == gitea.deletedBranches",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "gitea.clearDeletionHistory",
+                    "when": "view == gitea.deletedBranches",
+                    "group": "navigation@3"
+                },
+                {
+                    "command": "gitea.exportDeletionHistory",
+                    "when": "view == gitea.deletedBranches",
+                    "group": "1_export"
+                },
+                {
+                    "command": "gitea.importDeletionHistory",
+                    "when": "view == gitea.deletedBranches",
+                    "group": "1_export"
                 }
             ],
             "view/item/context": [
@@ -243,6 +323,16 @@
                     "command": "gitea.createBranchFromPR",
                     "when": "view == gitea.pullRequests && viewItem == pullRequest",
                     "group": "1_branch"
+                },
+                {
+                    "command": "gitea.restoreBranchFromTree",
+                    "when": "view == gitea.deletedBranches && viewItem == deletedBranch",
+                    "group": "inline"
+                },
+                {
+                    "command": "gitea.removeFromHistory",
+                    "when": "view == gitea.deletedBranches && viewItem == deletedBranch",
+                    "group": "1_actions"
                 }
             ]
         },
@@ -301,6 +391,13 @@
                     "type": "string",
                     "default": "default",
                     "description": "Name of the currently active Gitea profile"
+                },
+                "gitea.branchDeletionRetentionDays": {
+                    "type": "number",
+                    "default": 90,
+                    "description": "Number of days to retain deleted branch history (default: 90 days)",
+                    "minimum": 1,
+                    "maximum": 365
                 }
             }
         }

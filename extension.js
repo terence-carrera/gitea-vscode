@@ -5,6 +5,7 @@ const { RepositoryProvider, IssueProvider, PullRequestProvider } = require('./fe
 const { PullRequestWebviewProvider, IssueWebviewProvider, PullRequestCreationProvider } = require('./features/webviewProviders');
 const NotificationManager = require('./features/notifications');
 const BranchManager = require('./features/branches');
+const DeletedBranchesProvider = require('./features/deletedBranchesProvider');
 const StashManager = require('./features/stash');
 const { debounce, throttle } = require('./features/performanceOptimizer');
 
@@ -39,7 +40,10 @@ async function activate(context) {
         };
 
         // Initialize branch manager
-        const branchManager = new BranchManager(auth);
+        const branchManager = new BranchManager(auth, context);
+
+        // Initialize deleted branches provider
+        const deletedBranchesProvider = new DeletedBranchesProvider(branchManager, repositoryProvider);
 
         // Throttle refresh operations to prevent excessive API calls
         const throttledRefresh = throttle(() => {
@@ -87,6 +91,11 @@ async function activate(context) {
         treeDataProvider: pullRequestProvider,
         showCollapseAll: true
     });
+
+        const deletedBranchesTreeView = vscode.window.createTreeView('gitea.deletedBranches', {
+            treeDataProvider: deletedBranchesProvider,
+            showCollapseAll: true
+        });
 
     // Register commands
 
@@ -548,6 +557,258 @@ async function activate(context) {
         }
     });
 
+        // Delete branch command
+        const deleteBranchCommand = vscode.commands.registerCommand('gitea.deleteBranch', async () => {
+            try {
+                // Prompt user to select repository
+                const repos = await auth.makeRequest('/api/v1/user/repos');
+                const workspaceRepos = repositoryProvider.filterRepositoriesByWorkspace(repos || []);
+
+                if (workspaceRepos.length === 0) {
+                    vscode.window.showWarningMessage('No repositories found in workspace.');
+                    return;
+                }
+
+                const selectedRepo = await vscode.window.showQuickPick(
+                    workspaceRepos.map(r => ({ label: r.name, value: r.full_name })),
+                    { placeHolder: 'Select repository' }
+                );
+
+                if (!selectedRepo) return;
+                const repoName = selectedRepo.value;
+
+                const repoPath = branchManager.getRepositoryPath(repoName);
+                if (!repoPath) {
+                    vscode.window.showErrorMessage('Repository not found in workspace');
+                    return;
+                }
+
+                // Get branches
+                const branches = await branchManager.getBranches(repoPath);
+                const currentBranch = await branchManager.getCurrentBranch(repoPath);
+
+                // Filter out current branch and HEAD
+                const deletableBranches = branches.filter(b =>
+                    b !== currentBranch &&
+                    !b.includes('HEAD') &&
+                    !b.startsWith('remotes/')
+                );
+
+                if (deletableBranches.length === 0) {
+                    vscode.window.showInformationMessage('No branches available to delete');
+                    return;
+                }
+
+                const selectedBranch = await vscode.window.showQuickPick(
+                    deletableBranches.map(b => ({ label: b, value: b })),
+                    { placeHolder: 'Select branch to delete' }
+                );
+
+                if (!selectedBranch) return;
+
+                // Confirm deletion
+                const deleteType = await vscode.window.showQuickPick(
+                    [
+                        { label: 'Normal Delete', description: 'Delete only if merged', value: false },
+                        { label: 'Force Delete', description: 'Delete even if not merged', value: true }
+                    ],
+                    { placeHolder: `Delete branch "${selectedBranch.value}"?` }
+                );
+
+                if (!deleteType) return;
+
+                await branchManager.deleteBranch(repoPath, selectedBranch.value, deleteType.value);
+            } catch (error) {
+                console.error('Failed to delete branch:', error);
+                vscode.window.showErrorMessage(`Failed to delete branch: ${error.message}`);
+            }
+        });
+
+        // Restore deleted branch command
+        const restoreDeletedBranchCommand = vscode.commands.registerCommand('gitea.restoreDeletedBranch', async () => {
+            try {
+                // Prompt user to select repository
+                const repos = await auth.makeRequest('/api/v1/user/repos');
+                const workspaceRepos = repositoryProvider.filterRepositoriesByWorkspace(repos || []);
+
+                if (workspaceRepos.length === 0) {
+                    vscode.window.showWarningMessage('No repositories found in workspace.');
+                    return;
+                }
+
+                const selectedRepo = await vscode.window.showQuickPick(
+                    workspaceRepos.map(r => ({ label: r.name, value: r.full_name })),
+                    { placeHolder: 'Select repository' }
+                );
+
+                if (!selectedRepo) return;
+
+                await branchManager.showDeletedBranches(selectedRepo.value);
+            } catch (error) {
+                console.error('Failed to restore deleted branch:', error);
+                vscode.window.showErrorMessage(`Failed to restore deleted branch: ${error.message}`);
+            }
+        });
+
+        // Restore branch from reflog command
+        const restoreBranchFromReflogCommand = vscode.commands.registerCommand('gitea.restoreBranchFromReflog', async () => {
+            try {
+                // Prompt user to select repository
+                const repos = await auth.makeRequest('/api/v1/user/repos');
+                const workspaceRepos = repositoryProvider.filterRepositoriesByWorkspace(repos || []);
+
+                if (workspaceRepos.length === 0) {
+                    vscode.window.showWarningMessage('No repositories found in workspace.');
+                    return;
+                }
+
+                const selectedRepo = await vscode.window.showQuickPick(
+                    workspaceRepos.map(r => ({ label: r.name, value: r.full_name })),
+                    { placeHolder: 'Select repository' }
+                );
+
+                if (!selectedRepo) return;
+
+                await branchManager.restoreFromReflog(selectedRepo.value);
+                deletedBranchesProvider.refresh();
+            } catch (error) {
+                console.error('Failed to restore branch from reflog:', error);
+                vscode.window.showErrorMessage(`Failed to restore branch from reflog: ${error.message}`);
+            }
+        });
+
+        // Show deleted branch details command
+        const showDeletedBranchDetailsCommand = vscode.commands.registerCommand('gitea.showDeletedBranchDetails', async (deletion, repoPath) => {
+            try {
+                if (!deletion || !repoPath) return;
+
+                const deletedDate = new Date(deletion.deletedAt);
+                const message = [
+                    `Branch: ${deletion.name}`,
+                    `Commit SHA: ${deletion.commit}`,
+                    `Deleted: ${deletedDate.toLocaleString()}`,
+                    `Deleted by: ${deletion.deletedBy || 'extension'}`,
+                    `Repository: ${repoPath}`
+                ].join('\\n');
+
+                const action = await vscode.window.showInformationMessage(
+                    message,
+                    'Preview & Restore',
+                    'Copy Commit SHA',
+                    'Close'
+                );
+
+                if (action === 'Preview & Restore') {
+                    const shouldRestore = await branchManager.showDiffPreview(repoPath, deletion.name, deletion.commit);
+                    if (shouldRestore) {
+                        await branchManager.restoreBranch(repoPath, deletion.name, deletion.commit);
+                        deletedBranchesProvider.refresh();
+                    }
+                } else if (action === 'Copy Commit SHA') {
+                    await vscode.env.clipboard.writeText(deletion.commit);
+                    vscode.window.showInformationMessage('Commit SHA copied to clipboard');
+                }
+            } catch (error) {
+                console.error('Failed to show deleted branch details:', error);
+                vscode.window.showErrorMessage(`Failed to show details: ${error.message}`);
+            }
+        });
+
+        // Restore branch from tree command
+        const restoreBranchFromTreeCommand = vscode.commands.registerCommand('gitea.restoreBranchFromTree', async (treeItem) => {
+            try {
+                if (!treeItem || !treeItem.repoPath || !treeItem.branchName || !treeItem.commit) {
+                    vscode.window.showErrorMessage('Invalid branch selection');
+                    return;
+                }
+
+                // Show diff preview before restoring
+                const shouldRestore = await branchManager.showDiffPreview(treeItem.repoPath, treeItem.branchName, treeItem.commit);
+
+                if (shouldRestore) {
+                    await branchManager.restoreBranch(treeItem.repoPath, treeItem.branchName, treeItem.commit);
+                    deletedBranchesProvider.refresh();
+                }
+            } catch (error) {
+                console.error('Failed to restore branch from tree:', error);
+                vscode.window.showErrorMessage(`Failed to restore branch: ${error.message}`);
+            }
+        });
+
+        // Remove from history command
+        const removeFromHistoryCommand = vscode.commands.registerCommand('gitea.removeFromHistory', async (treeItem) => {
+            try {
+                if (!treeItem || !treeItem.repoPath || !treeItem.branchName) {
+                    vscode.window.showErrorMessage('Invalid branch selection');
+                    return;
+                }
+
+                const confirm = await vscode.window.showQuickPick(['Yes', 'No'], {
+                    placeHolder: `Remove "${treeItem.branchName}" from deletion history?`
+                });
+
+                if (confirm === 'Yes') {
+                    const deleted = branchManager.getDeletedBranches(treeItem.repoPath);
+                    const filtered = deleted.filter(b => b.name !== treeItem.branchName);
+                    branchManager.deletedBranches.set(treeItem.repoPath, filtered);
+                    await branchManager.saveDeletionHistory();
+                    deletedBranchesProvider.refresh();
+                    vscode.window.showInformationMessage(`Removed "${treeItem.branchName}" from history`);
+                }
+            } catch (error) {
+                console.error('Failed to remove from history:', error);
+                vscode.window.showErrorMessage(`Failed to remove from history: ${error.message}`);
+            }
+        });
+
+        // Clear all deletion history command
+        const clearDeletionHistoryCommand = vscode.commands.registerCommand('gitea.clearDeletionHistory', async () => {
+            try {
+                const confirm = await vscode.window.showWarningMessage(
+                    'Clear all deletion history? This cannot be undone.',
+                    { modal: true },
+                    'Clear All',
+                    'Cancel'
+                );
+
+                if (confirm === 'Clear All') {
+                    branchManager.deletedBranches.clear();
+                    await branchManager.saveDeletionHistory();
+                    deletedBranchesProvider.refresh();
+                    vscode.window.showInformationMessage('Deletion history cleared');
+                }
+            } catch (error) {
+                console.error('Failed to clear deletion history:', error);
+                vscode.window.showErrorMessage(`Failed to clear history: ${error.message}`);
+            }
+        });
+
+        // Refresh deleted branches command
+        const refreshDeletedBranchesCommand = vscode.commands.registerCommand('gitea.refreshDeletedBranches', () => {
+            deletedBranchesProvider.refresh();
+        });
+
+        // Export deletion history command
+        const exportDeletionHistoryCommand = vscode.commands.registerCommand('gitea.exportDeletionHistory', async () => {
+            try {
+                await branchManager.exportDeletionHistory();
+            } catch (error) {
+                console.error('Failed to export deletion history:', error);
+                vscode.window.showErrorMessage(`Failed to export deletion history: ${error.message}`);
+            }
+        });
+
+        // Import deletion history command
+        const importDeletionHistoryCommand = vscode.commands.registerCommand('gitea.importDeletionHistory', async () => {
+            try {
+                await branchManager.importDeletionHistory();
+                deletedBranchesProvider.refresh();
+            } catch (error) {
+                console.error('Failed to import deletion history:', error);
+                vscode.window.showErrorMessage(`Failed to import deletion history: ${error.message}`);
+            }
+        });
+
         // Initialize stash manager
         const stashManager = new StashManager();
 
@@ -613,6 +874,7 @@ async function activate(context) {
         repositoryTreeView,
         issueTreeView,
         pullRequestTreeView,
+        deletedBranchesTreeView,
         configureCommand,
         searchRepositoriesCommand,
         searchIssuesCommand,
@@ -626,6 +888,16 @@ async function activate(context) {
         switchBranchCommand,
         createBranchFromIssueCommand,
         createBranchFromPRCommand,
+        deleteBranchCommand,
+        restoreDeletedBranchCommand,
+        restoreBranchFromReflogCommand,
+        showDeletedBranchDetailsCommand,
+        restoreBranchFromTreeCommand,
+        removeFromHistoryCommand,
+        clearDeletionHistoryCommand,
+        refreshDeletedBranchesCommand,
+        exportDeletionHistoryCommand,
+        importDeletionHistoryCommand,
         addProfileCommand,
         manageStashCommand,
         switchProfileCommand,
