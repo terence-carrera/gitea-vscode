@@ -10,6 +10,19 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Branch tagging and improved workflows.
 - Inline code review with diff views.
 - Advanced PR filtering and sorting.
+- Markdown Support in PR and Issue Details.
+- Enhanced notification system with actionable alerts.
+
+### [0.1.2] - 2026-01-10
+
+#### Changed
+- Extension compatibility updated to VS Code 1.90.0 and above.
+
+### [0.1.1] - 2026-01-09
+
+#### Added
+
+- `gitea.defaultRepoStartingPath` setting to specify default path for new repositories.
 
 ### [0.1.0] - 2026-01-09
 

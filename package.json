@@ -9,7 +9,7 @@
         "url": "https://github.com/terence-carrera/gitea-vscode"
     },
     "engines": {
-        "vscode": "^1.108.0"
+        "vscode": "^1.90.0"
     },
     "categories": [
         "SCM Providers"
@@ -236,7 +236,7 @@
         "test": "vscode-test"
     },
     "devDependencies": {
-        "@types/vscode": "^1.108.0",
+        "@types/vscode": "^1.90.0",
         "@types/mocha": "^10.0.10",
         "@types/node": "22.x",
         "eslint": "^9.39.1",
