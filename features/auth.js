@@ -390,6 +390,7 @@ class GiteaAuth {
                         try {
                             resolve(JSON.parse(data));
                         } catch (e) {
+                            void(e);
                             resolve(data);
                         }
                     } else {

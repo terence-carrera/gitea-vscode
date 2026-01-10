@@ -150,15 +150,18 @@
             "gitea-explorer": [
                 {
                     "id": "gitea.repositories",
-                    "name": "Repositories"
+                    "name": "Repositories",
+                    "icon": "$(git-branch)"
                 },
                 {
                     "id": "gitea.issues",
-                    "name": "Issues"
+                    "name": "Issues",
+                    "icon": "$(issue-opened)"
                 },
                 {
                     "id": "gitea.pullRequests",
-                    "name": "Pull Requests"
+                    "name": "Pull Requests",
+                    "icon": "$(git-pull-request)"
                 }
             ]
         },

@@ -689,6 +689,7 @@ class PullRequestWebviewProvider {
         try {
             return marked.parse(text);
         } catch (error) {
+            void(error);
             return this.escapeHtml(text);
         }
     }
@@ -1290,6 +1291,7 @@ class IssueWebviewProvider {
         try {
             return marked.parse(text);
         } catch (error) {
+            void(error);
             return this.escapeHtml(text);
         }
     }
