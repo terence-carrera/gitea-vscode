@@ -123,6 +123,13 @@ Notes
 - VS Code 1.90.0 or newer.
 - Git installed.
 - Access to a Gitea instance and a Personal Access Token.
+    - **Required Token Permissions (Read & Write)**:
+        - **Repository**: Create repositories, access repository metadata, manage branches
+        - **Issue**: View, create, import, and comment on issues
+        - **Pull Request**: View, create, review, and merge pull requests
+    - **Required Token Permissions (Read Only)**:
+        - **Notification**: Receive repository activity notifications
+        - **User**: Authenticate and fetch user information
 
 ### Known Issues
 
