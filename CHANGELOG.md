@@ -10,7 +10,7 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Advanced PR filtering and sorting.
 - Branch rename operations.
 
-### [0.1.5] - 2026-01-11
+### [0.1.6] - 2026-01-12
 
 #### Added
 
@@ -19,11 +19,24 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   - Required column: Title; optional columns: Description, Labels, Assignee, Milestone, Priority, Due Date.
   - Automatic label name to ID mapping - labels must exist in target repository.
   - Interactive import options dialog with preview of first 3 issues.
+  - **Duplicate detection**: intelligent duplicate checking using similarity scoring to prevent redundant issue creation.
+    - Compares new issues against existing repository issues using title and description similarity.
+    - Levenshtein distance algorithm calculates combined similarity score (70% title, 30% description).
+    - Configurable similarity threshold: Very strict (90%), Strict (80%), Normal (70%), or Loose (60%).
+    - Automatically skips issues that match existing ones above the threshold.
+    - Detailed duplicate report shows matched issues with similarity percentage, state, and update timestamp.
+    - Interactive duplicate viewer with links to matched issues for manual review.
   - Import progress tracking with detailed success/failure reporting.
   - Comprehensive error handling with detailed failure information for troubleshooting.
   - `gitea.importIssues` command: import issues from XLSX file into selected repository.
   - Archive icon button in Issues view for easy access to import functionality.
   - Full documentation in [docs/IMPORT_ISSUES_FEATURE.md](docs/IMPORT_ISSUES_FEATURE.md).
+- **Personal Access Token documentation**: added detailed token permission requirements to README.md.
+  - Specifies required Read & Write permissions: Repository, Issue, Pull Request.
+  - Specifies required Read Only permissions: Notification, User.
+  - Helps users configure tokens correctly for all extension features.
+
+### [0.1.5] - 2026-01-11
 
 #### Changed
 
