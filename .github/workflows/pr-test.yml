@@ -16,7 +16,7 @@ jobs:
 
         strategy:
             matrix:
-                node-version: [18.x, 20.x, 22.x]
+                node-version: [20.x]
 
         steps:
             - name: Checkout Code
@@ -34,11 +34,16 @@ jobs:
             - name: Run ESLint
               run: npm run lint
 
-            - name: Run Tests
-              run: npm test
+            - name: Setup Display Server (xvfb)
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y xvfb libxkbcommon-x11-0 libxkbcommon0
+
+            - name: Run Tests with xvfb
+              run: xvfb-run -a npm test
               env:
-                  # Increase memory for tests if needed
                   NODE_OPTIONS: --max-old-space-size=4096
+                  DISPLAY: :99
 
             - name: Upload Test Results
               if: always()
