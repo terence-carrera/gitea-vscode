@@ -21,11 +21,11 @@ Your Excel file should contain the following columns (in any order):
 
 ### Optional Columns
 
-- **Description** - The issue description/body text
+- **Description** - Issue description/body text
 - **Labels** - Comma or semicolon-separated list of label names (labels must exist in target repository; case-insensitive matching)
-- **Assignee** - The username of the assignee
-- **Milestone** - The milestone name (must exist in target repository)
-- **State** - Issue state (open/closed) - default is "open" (currently not used during import)
+- **Assignee** - Username of the assignee
+- **Milestone** - Milestone name (must exist in target repository)
+- **State** - Issue state (`open` or `closed`); default is `open` (not used during import)
 - **Priority** - Issue priority level (informational only)
 - **Due Date** - Due date in ISO format (YYYY-MM-DD)
 

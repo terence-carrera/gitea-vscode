@@ -1,0 +1,56 @@
+name: Lint and Test on Pull Request
+
+on:
+    pull_request:
+        branches:
+            - master
+        types:
+            - opened
+            - synchronize
+            - reopened
+
+jobs:
+    test:
+        name: Lint and Test
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [20.x]
+
+        steps:
+            - name: Checkout Code
+              uses: actions/checkout@v4
+
+            - name: Setup Node.JS ${{ matrix.node-version }}
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: "npm"
+
+            - name: Install Dependencies
+              run: npm ci
+
+            - name: Run ESLint
+              run: npm run lint
+
+            - name: Setup Display Server (xvfb)
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y xvfb libxkbcommon-x11-0 libxkbcommon0
+
+            - name: Run Tests with xvfb
+              run: xvfb-run -a npm test
+              env:
+                  NODE_OPTIONS: --max-old-space-size=4096
+                  DISPLAY: :99
+
+            - name: Upload Test Results
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-results-node-${{ matrix.node-version }}
+                  path: |
+                      test-results/
+                      coverage/
+                  retention-days: 30

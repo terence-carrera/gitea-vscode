@@ -77,7 +77,7 @@ Integrate Gitea into VS Code: browse repositories, track issues and pull request
 - Issues: repository groups → `Open` and `Closed` sections → individual issues.
 - Pull Requests: repository groups → `Open`, `Work-in-Progress`, and `Closed` sections.
 
-Notes
+### Notes
 
 - WIP detection uses `draft` flag or common title prefixes (wip, [wip], work in progress, draft).
 - Searches return flat lists for quick navigation; clear search to return to grouped view.
@@ -104,7 +104,7 @@ Notes
 
 ### Settings
 
-- `gitea.instanceUrl`: Your Gitea instance URL (e.g., <https://gitea.example.com>).
+- `gitea.instanceUrl`: Your Gitea instance URL (e.g., `https://gitea.example.com`).
 - `gitea.authToken`: Personal Access Token for Gitea API authentication.
 - `gitea.enableNotifications`: Enable notifications for repository activities.
 - `gitea.notificationPollInterval`: Poll interval for notifications in ms (minimum 30000).
@@ -123,6 +123,13 @@ Notes
 - VS Code 1.90.0 or newer.
 - Git installed.
 - Access to a Gitea instance and a Personal Access Token.
+  - **Required Token Permissions (Read & Write)**:
+    - **Repository**: Create repositories, access repository metadata, manage branches
+    - **Issue**: View, create, import, and comment on issues
+    - **Pull Request**: View, create, review, and merge pull requests
+  - **Required Token Permissions (Read Only)**:
+    - **Notification**: Receive repository activity notifications
+    - **User**: Authenticate and fetch user information
 
 ### Known Issues
 

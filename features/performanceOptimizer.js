@@ -3,7 +3,7 @@
  * Implements TTL-based cache invalidation
  */
 class CacheManager {
-    constructor(ttl = 300000) { // 5 minutes default
+    constructor(ttl = 10000) { // 10 seconds default
         this.cache = new Map();
         this.ttl = ttl;
     }

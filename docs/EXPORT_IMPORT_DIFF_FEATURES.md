@@ -84,7 +84,7 @@ The branch deletion & restoration feature has been enhanced with two major impro
 
 ### Diff Preview Flow
 
-```
+```text
 User Action → showDiffPreview()
     ↓
 Get current branch

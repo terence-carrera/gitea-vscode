@@ -1450,6 +1450,10 @@ class IssueWebviewProvider {
                             const branches = await this.loadBranches(message.repository);
                             panel.webview.postMessage({ command: 'branchesLoaded', branches });
                             break;
+                        case 'checkDuplicates':
+                            const duplicates = await this.checkDuplicates(message.repository, message.title, message.body);
+                            panel.webview.postMessage({ command: 'duplicatesChecked', duplicates });
+                            break;
                         case 'createIssue':
                             await this.createIssue(message.data);
                             panel.dispose();
@@ -1475,6 +1479,102 @@ class IssueWebviewProvider {
             return branches.map(b => b.name);
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to load branches: ${error.message}`);
+            return [];
+        }
+    }
+
+    /**
+     * Calculate similarity score between two strings (0 to 1)
+     */
+    calculateStringSimilarity(str1, str2) {
+        const s1 = String(str1 || '').toLowerCase();
+        const s2 = String(str2 || '').toLowerCase();
+        
+        if (s1 === s2) return 1;
+        if (s1.length === 0 || s2.length === 0) return 0;
+        
+        const longer = s1.length > s2.length ? s1 : s2;
+        const shorter = s1.length > s2.length ? s2 : s1;
+        
+        const editDistance = this.getLevenshteinDistance(shorter, longer);
+        return (longer.length - editDistance) / longer.length;
+    }
+
+    /**
+     * Calculate Levenshtein distance between two strings
+     */
+    getLevenshteinDistance(s1, s2) {
+        const costs = [];
+        for (let i = 0; i <= s1.length; i++) {
+            let lastValue = i;
+            for (let j = 0; j <= s2.length; j++) {
+                if (i === 0) {
+                    costs[j] = j;
+                } else if (j > 0) {
+                    let newValue = costs[j - 1];
+                    if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
+                        newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+                    }
+                    costs[j - 1] = lastValue;
+                    lastValue = newValue;
+                }
+            }
+            if (i > 0) costs[s2.length] = lastValue;
+        }
+        return costs[s2.length];
+    }
+
+    /**
+     * Check for duplicate issues
+     */
+    async checkDuplicates(repository, title, body) {
+        try {
+            const [owner, repo] = repository.split('/');
+            const existingIssues = await this.auth.makeRequest(
+                `/api/v1/repos/${owner}/${repo}/issues?state=all&limit=100`
+            );
+            
+            if (!Array.isArray(existingIssues) || existingIssues.length === 0) {
+                return [];
+            }
+
+            const duplicates = [];
+            const threshold = 0.7;
+            
+            existingIssues.forEach(existingIssue => {
+                // Skip pull requests
+                if (existingIssue.pull_request) return;
+                
+                // Calculate title similarity
+                const titleSimilarity = this.calculateStringSimilarity(title, existingIssue.title);
+                
+                // Calculate description similarity (if both have descriptions)
+                let bodySimilarity = 0;
+                if (body && existingIssue.body) {
+                    bodySimilarity = this.calculateStringSimilarity(body, existingIssue.body);
+                }
+                
+                // Calculate combined similarity (weighted: 70% title, 30% body)
+                const combinedScore = titleSimilarity * 0.7 + bodySimilarity * 0.3;
+                
+                if (combinedScore >= threshold) {
+                    duplicates.push({
+                        number: existingIssue.number,
+                        title: existingIssue.title,
+                        state: existingIssue.state,
+                        url: existingIssue.html_url,
+                        similarity: Math.round(combinedScore * 100),
+                        created_at: existingIssue.created_at,
+                        updated_at: existingIssue.updated_at
+                    });
+                }
+            });
+            
+            // Sort by similarity score (highest first)
+            duplicates.sort((a, b) => b.similarity - a.similarity);
+            return duplicates;
+        } catch (error) {
+            console.error('Error checking duplicates:', error);
             return [];
         }
     }
@@ -1573,10 +1673,67 @@ class IssueWebviewProvider {
             background-color: var(--vscode-button-secondaryBackground);
             color: var(--vscode-button-secondaryForeground);
         }
+        button.secondary:hover {
+            background-color: var(--vscode-button-secondaryHoverBackground);
+        }
         h1 {
             font-size: 24px;
             margin-top: 0;
             margin-bottom: 24px;
+        }
+        .duplicate-results {
+            background-color: var(--vscode-editor-inlineValue-background);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            padding: 12px;
+            margin-top: 16px;
+            display: none;
+        }
+        .duplicate-results.show {
+            display: block;
+        }
+        .duplicate-item {
+            background-color: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 3px;
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+        .duplicate-item:last-child {
+            margin-bottom: 0;
+        }
+        .duplicate-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .duplicate-title {
+            color: var(--vscode-textLink-foreground);
+            text-decoration: none;
+            font-weight: 500;
+            flex: 1;
+        }
+        .duplicate-score {
+            background-color: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            white-space: nowrap;
+            margin-left: 8px;
+        }
+        .duplicate-meta {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+        }
+        .no-duplicates {
+            color: var(--vscode-textLink-foreground);
+            font-size: 13px;
+        }
+        .checking-status {
+            color: var(--vscode-descriptionForeground);
+            font-size: 12px;
         }
     </style>
 </head>
@@ -1616,6 +1773,17 @@ class IssueWebviewProvider {
             <div class="hint">Optional: tag this issue with a specific branch</div>
         </div>
         
+        <div id="duplicateResults" class="duplicate-results">
+            <div id="duplicateHeader" style="margin-bottom: 12px; font-weight: 500; border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 8px;">
+                Potential Duplicate Issues Found
+            </div>
+            <div id="duplicateList"></div>
+        </div>
+        
+        <div class="button-group">
+            <button type="button" id="checkDuplicatesBtn" class="secondary" style="flex: 1;">Check for Duplicates</button>
+        </div>
+        
         <div class="button-group">
             <button type="submit">Create Issue</button>
             <button type="button" class="secondary" onclick="window.close()">Cancel</button>
@@ -1624,12 +1792,47 @@ class IssueWebviewProvider {
 
     <script>
         const vscode = acquireVsCodeApi();
+        let isCheckingDuplicates = false;
         
         document.getElementById('repository').addEventListener('change', async (e) => {
             const repository = e.target.value;
             if (repository) {
                 vscode.postMessage({ command: 'loadBranches', repository });
             }
+            // Clear duplicate results when repository changes
+            document.getElementById('duplicateResults').classList.remove('show');
+        });
+        
+        document.getElementById('checkDuplicatesBtn').addEventListener('click', async (e) => {
+            e.preventDefault();
+            const repository = document.getElementById('repository').value;
+            const title = document.getElementById('title').value;
+            const body = document.getElementById('body').value;
+            
+            if (!repository) {
+                alert('Please select a repository first');
+                return;
+            }
+            
+            if (!title) {
+                alert('Please enter a title first');
+                return;
+            }
+            
+            if (isCheckingDuplicates) return;
+            
+            isCheckingDuplicates = true;
+            const btn = document.getElementById('checkDuplicatesBtn');
+            const originalText = btn.textContent;
+            btn.textContent = 'Checking for duplicates...';
+            btn.disabled = true;
+            
+            vscode.postMessage({
+                command: 'checkDuplicates',
+                repository: repository,
+                title: title,
+                body: body
+            });
         });
         
         window.addEventListener('message', event => {
@@ -1649,6 +1852,34 @@ class IssueWebviewProvider {
                         branchSelect.value = defaultBranch;
                         break;
                     }
+                }
+            } else if (message.command === 'duplicatesChecked') {
+                isCheckingDuplicates = false;
+                const btn = document.getElementById('checkDuplicatesBtn');
+                btn.textContent = 'Check for Duplicates';
+                btn.disabled = false;
+                
+                const resultsDiv = document.getElementById('duplicateResults');
+                const listDiv = document.getElementById('duplicateList');
+                
+                if (message.duplicates && message.duplicates.length > 0) {
+                    resultsDiv.classList.add('show');
+                    listDiv.innerHTML = message.duplicates.map(dup => \`
+                        <div class="duplicate-item">
+                            <div class="duplicate-header">
+                                <a href="\${dup.url}" class="duplicate-title" target="_blank">
+                                    #\${dup.number}: \${dup.title}
+                                </a>
+                                <span class="duplicate-score">\${dup.similarity}% match</span>
+                            </div>
+                            <div class="duplicate-meta">
+                                State: <strong>\${dup.state}</strong> | Updated: \${new Date(dup.updated_at).toLocaleDateString()}
+                            </div>
+                        </div>
+                    \`).join('');
+                } else {
+                    resultsDiv.classList.add('show');
+                    listDiv.innerHTML = '<div class="no-duplicates">✓ No duplicate issues found</div>';
                 }
             }
         });

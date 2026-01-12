@@ -7,7 +7,7 @@ const NotificationManager = require('./features/notifications');
 const BranchManager = require('./features/branches');
 const DeletedBranchesProvider = require('./features/deletedBranchesProvider');
 const StashManager = require('./features/stash');
-const { debounce, throttle } = require('./features/performanceOptimizer');
+const { throttle } = require('./features/performanceOptimizer');
 const { showImportIssuesDialog } = require('./features/importIssues');
 
 /**
@@ -15,8 +15,6 @@ const { showImportIssuesDialog } = require('./features/importIssues');
  */
 async function activate(context) {
     try {
-        console.log('Gitea Extension is Now Active!');
-
         // Initialize authentication
         const auth = new GiteaAuth();
         await auth.initialize();

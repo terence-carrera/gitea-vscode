@@ -1,38 +1,54 @@
-## Changelog
+# Changelog
 
 All notable changes to this project are documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-### [Unreleased]
+## [Unreleased]
 
-#### Planned
+### Planned
 
 - Advanced PR filtering and sorting.
 - Branch rename operations.
 
-### [0.1.5] - 2026-01-11
+## [0.1.6] - 2026-01-12
 
-#### Added
+### Added
 
 - **Import Issues from XLSX**: bulk import issues from Excel files with automatic label mapping and error reporting.
   - Support for Excel XLSX format with flexible column naming (case-insensitive).
   - Required column: Title; optional columns: Description, Labels, Assignee, Milestone, Priority, Due Date.
   - Automatic label name to ID mapping - labels must exist in target repository.
   - Interactive import options dialog with preview of first 3 issues.
+  - **Duplicate detection**: intelligent duplicate checking using similarity scoring to prevent redundant issue creation.
+    - Compares new issues against existing repository issues using title and description similarity.
+    - Levenshtein distance algorithm calculates combined similarity score (75% title, 25% description).
+    - **Pagination support**: fetches all repository issues regardless of count (not limited to first 100).
+    - **Optimized for bulk imports**: pre-fetches all existing issues once before processing to minimize API calls.
+    - **Improved body handling**: intelligently treats missing descriptions - issues with no body are considered matching on body criteria.
+    - Configurable similarity threshold: Very strict (90%), Strict (80%), Normal (70%), or Loose (60%).
+    - Automatically skips issues that match existing ones above the threshold.
+    - Detailed duplicate report shows matched issues with similarity percentage, state, and update timestamp.
+    - Interactive duplicate viewer with links to matched issues for manual review.
   - Import progress tracking with detailed success/failure reporting.
   - Comprehensive error handling with detailed failure information for troubleshooting.
   - `gitea.importIssues` command: import issues from XLSX file into selected repository.
   - Archive icon button in Issues view for easy access to import functionality.
   - Full documentation in [docs/IMPORT_ISSUES_FEATURE.md](docs/IMPORT_ISSUES_FEATURE.md).
+- **Personal Access Token documentation**: added detailed token permission requirements to README.md.
+  - Specifies required Read & Write permissions: Repository, Issue, Pull Request.
+  - Specifies required Read Only permissions: Notification, User.
+  - Helps users configure tokens correctly for all extension features.
 
-#### Changed
+## [0.1.5] - 2026-01-11
+
+### Changed
 
 - **Status bar icon**: now uses `$(account)` icon for better visual consistency with VS Code.
 - **Status bar color**: removed custom color to respect user's theme preferences.
 
-### [0.1.4] - 2026-01-11
+## [0.1.4] - 2026-01-11
 
-#### Added
+### Added
 
 - **Branch deletion tracking & restoration**: comprehensive branch management system with deletion history and recovery capabilities.
 - **Deleted Branches view**: dedicated tree view showing all tracked deleted branches organized by repository with timestamps.
@@ -57,14 +73,14 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   - `gitea.exportDeletionHistory`: export deletion history to a JSON file.
   - `gitea.importDeletionHistory`: import deletion history from a JSON file with merge or replace strategies.
 
-#### Changed
+### Changed
 
 - Branch deletion now automatically tracks deletions for potential restoration.
 - Deletion history persists across VS Code restarts and syncs via Settings Sync when enabled.
 
-### [0.1.3] - 2026-01-10
+## [0.1.3] - 2026-01-10
 
-#### Added
+### Added
 
 - Branch switching/checkout: switch between branches in your repository with a quick picker.
 - Quick branch creation from Issues: create a new branch directly from an issue with auto-generated branch names.
@@ -87,33 +103,32 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Conflict details display: when a PR has merge conflicts, shows the actual list of conflicting files with conflict markers instead of a generic error message.
 - Out-of-date PR detection: displays an alert banner when a PR branch is behind the base branch with an "Update branch by merge" action button.
 
-#### Changed
+### Changed
 
 - Performance tuning: cache GET responses with a 5-minute TTL, throttle refresh bursts, lazily initialize notifications, and defer notification polling to reduce startup cost and API load.
 
-#### Fixed
-
+### Fixed
 - Repository path lookup now searches subdirectories (up to 2 levels deep) for better repository detection.
 - PR detail view now shows an accurate commit count by fetching commit list when the API omits the count.
 - Improved repository matching with support for multiple URL formats (SSH, HTTPS, with/without .git suffix).
 - Fixed "Repository not found in workspace" error when using `gitea.switchBranch` from command palette.
 - Fixed profile list not showing created profiles by reloading from settings on demand.
 
-### [0.1.2] - 2026-01-10
+## [0.1.2] - 2026-01-10
 
-#### Changed
+### Changed
 
 - Extension compatibility updated to VS Code 1.90.0 and above.
 
-### [0.1.1] - 2026-01-09
+## [0.1.1] - 2026-01-09
 
-#### Added
+### Added
 
 - `gitea.defaultRepoStartingPath` setting to specify default path for new repositories.
 
-### [0.1.0] - 2026-01-09
+## [0.1.0] - 2026-01-09
 
-#### Added
+### Added
 
 - WebView detail panels for Issues: view full issue details, comments, labels, and state.
 - WebView detail panels for Pull Requests: view PR details, commits, files changed, reviews, and comments.
@@ -127,16 +142,16 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Close/reopen actions: close or reopen issues and pull requests from detail panels.
 - Real-time updates: detail panels refresh after actions to show latest state.
 
-#### Changed
+### Changed
 
 - Issue and PR tree items now include "View Details" context menu action with eye icon.
 - Create Issue command now opens rich WebView form instead of input boxes.
 - Create Pull Request command now opens rich WebView form with branch selection.
 - Enhanced UX with color-coded state badges and improved metadata display.
 
-### [0.0.3] - 2026-01-09
+## [0.0.3] - 2026-01-09
 
-#### Added
+### Added
 
 - Issues view grouped by Repository → State (Open/Closed) → Items.
 - Pull Requests view grouped by Repository → State (Open/WIP/Closed) → Items, with WIP/draft detection.
@@ -146,25 +161,25 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Clone-and-open workflow for repositories not yet in the workspace.
 - Notifications: polling toggle and status command.
 
-#### Changed
+### Changed
 
 - Repository listing now filters to repos actually present in the current workspace by parsing `.git/config` remotes.
 - Grouping order switched to Repository → State → Items for improved scanability.
 
-#### Fixed
+### Fixed
 
 - Stability improvements and activation error fixes in tree providers.
 
-### [0.0.2]
+## [0.0.2]
 
-#### Added (0.0.2)
+### Added (0.0.2)
 
 - Activity Bar container and basic Repositories/Issues/Pull Requests views.
 - Repository search.
 - Basic authentication configuration and request handling.
 
-### [0.0.1]
+## [0.0.1]
 
-#### Added (0.0.1)
+### Added (0.0.1)
 
 - Initial extension scaffold and configuration.
