@@ -2,7 +2,7 @@
 
 ## Component Diagram
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────┐
 │                        VS Code Extension                           │
 ├────────────────────────────────────────────────────────────────────┤
@@ -35,7 +35,8 @@
 ## Data Flow
 
 ### Branch Deletion Flow
-```
+
+```text
 User Action: Delete Branch
         │
         ▼
@@ -69,7 +70,8 @@ User Action: Delete Branch
 ```
 
 ### Branch Restoration Flow
-```
+
+```text
 User Action: Restore Branch
         │
         ▼

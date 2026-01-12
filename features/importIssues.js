@@ -109,62 +109,100 @@ function getLevenshteinDistance(s1, s2) {
 }
 
 /**
- * Find potential duplicate issues based on title and description similarity
+ * Fetch all issues from a repository with pagination
  * @param {Object} auth - Auth object for API calls
  * @param {string} owner - Repository owner
  * @param {string} repo - Repository name
- * @param {Object} newIssue - Issue object to check
- * @param {number} threshold - Similarity threshold (0-1), default 0.7
- * @returns {Promise<Array>} Array of potential duplicate issues
+ * @param {number} pageSize - Issues per page (default 50)
+ * @returns {Promise<Array>} Array of all issues in the repository
  */
-async function findDuplicateIssues(auth, owner, repo, newIssue, threshold = 0.7) {
+async function fetchAllIssues(auth, owner, repo, pageSize = 50) {
+    const allIssues = [];
+    let page = 1;
+    let hasMore = true;
+
     try {
-        const existingIssues = await auth.makeRequest(
-            `/api/v1/repos/${owner}/${repo}/issues?state=all&limit=100`
-        );
-        
-        if (!Array.isArray(existingIssues) || existingIssues.length === 0) {
-            return [];
+        while (hasMore) {
+            const issues = await auth.makeRequest(
+                `/api/v1/repos/${owner}/${repo}/issues?state=all&limit=${pageSize}&page=${page}`
+            );
+
+            if (!Array.isArray(issues) || issues.length === 0) {
+                hasMore = false;
+            } else {
+                // Filter out pull requests
+                issues.forEach(issue => {
+                    if (!issue.pull_request) {
+                        allIssues.push(issue);
+                    }
+                });
+
+                // If we got less than pageSize, we've reached the end
+                if (issues.length < pageSize) {
+                    hasMore = false;
+                } else {
+                    page++;
+                }
+            }
         }
 
-        const duplicates = [];
-        
-        existingIssues.forEach(existingIssue => {
-            // Skip pull requests
-            if (existingIssue.pull_request) return;
-            
-            // Calculate title similarity
-            const titleSimilarity = calculateStringSimilarity(newIssue.title, existingIssue.title);
-            
-            // Calculate description similarity (if both have descriptions)
-            let bodySimilarity = 0;
-            if (newIssue.body && existingIssue.body) {
-                bodySimilarity = calculateStringSimilarity(newIssue.body, existingIssue.body);
-            }
-            
-            // Calculate combined similarity (weighted: 70% title, 30% body)
-            const combinedScore = titleSimilarity * 0.7 + bodySimilarity * 0.3;
-            
-            if (combinedScore >= threshold) {
-                duplicates.push({
-                    number: existingIssue.number,
-                    title: existingIssue.title,
-                    state: existingIssue.state,
-                    url: existingIssue.html_url,
-                    similarity: Math.round(combinedScore * 100),
-                    created_at: existingIssue.created_at,
-                    updated_at: existingIssue.updated_at
-                });
-            }
-        });
-        
-        // Sort by similarity score (highest first)
-        duplicates.sort((a, b) => b.similarity - a.similarity);
-        return duplicates;
+        console.log(`[DEBUG] Fetched ${allIssues.length} existing issues for duplicate detection`);
+        return allIssues;
     } catch (error) {
-        console.error('Error finding duplicates:', error);
+        console.error('Error fetching all issues:', error);
         return [];
     }
+}
+
+/**
+ * Find potential duplicate issues based on title and description similarity
+ * @param {Object} newIssue - Issue object to check
+ * @param {Array} existingIssues - Pre-fetched array of existing issues
+ * @param {number} threshold - Similarity threshold (0-1), default 0.7
+ * @returns {Array} Array of potential duplicate issues
+ */
+function findDuplicateIssuesInCache(newIssue, existingIssues, threshold = 0.7) {
+    if (!Array.isArray(existingIssues) || existingIssues.length === 0) {
+        return [];
+    }
+
+    const duplicates = [];
+
+    existingIssues.forEach(existingIssue => {
+        // Calculate title similarity
+        const titleSimilarity = calculateStringSimilarity(newIssue.title, existingIssue.title);
+
+        // Calculate description similarity with improved handling for missing bodies
+        let bodySimilarity = 0;
+        if (newIssue.body && existingIssue.body) {
+            // Both have bodies - compare them
+            bodySimilarity = calculateStringSimilarity(newIssue.body, existingIssue.body);
+        } else if (!newIssue.body && !existingIssue.body) {
+            // Both have no bodies - consider them as matching on this criteria
+            bodySimilarity = 1.0;
+        }
+        // If only one has a body, bodySimilarity remains 0
+
+        // Calculate combined similarity (weighted: 75% title, 25% body)
+        // Increased title weight since body might be missing
+        const combinedScore = titleSimilarity * 0.75 + bodySimilarity * 0.25;
+
+        if (combinedScore >= threshold) {
+            duplicates.push({
+                number: existingIssue.number,
+                title: existingIssue.title,
+                state: existingIssue.state,
+                url: existingIssue.html_url,
+                similarity: Math.round(combinedScore * 100),
+                created_at: existingIssue.created_at,
+                updated_at: existingIssue.updated_at
+            });
+        }
+    });
+
+    // Sort by similarity score (highest first)
+    duplicates.sort((a, b) => b.similarity - a.similarity);
+    return duplicates;
 }
 
 /**
@@ -194,16 +232,21 @@ async function importIssuesInternal(auth, repositoryFullName, issues, options = 
         // Continue without label mapping
     }
 
+    // Pre-fetch all existing issues for duplicate detection (optimization)
+    let existingIssuesCache = [];
+    if (options.checkDuplicates) {
+        console.log('[DEBUG] Pre-fetching all existing issues for duplicate detection...');
+        existingIssuesCache = await fetchAllIssues(auth, owner, repo);
+    }
+
     for (let i = 0; i < issues.length; i++) {
         const issue = issues[i];
         try {
             // Check for duplicates if option is enabled
-            if (options.checkDuplicates) {
-                const potentialDuplicates = await findDuplicateIssues(
-                    auth,
-                    owner,
-                    repo,
+            if (options.checkDuplicates && existingIssuesCache.length > 0) {
+                const potentialDuplicates = findDuplicateIssuesInCache(
                     issue,
+                    existingIssuesCache,
                     options.duplicateThreshold || 0.7
                 );
 
@@ -783,5 +826,6 @@ module.exports = {
     parseXlsxFile,
     importIssuesInternal,
     showImportIssuesDialog,
-    findDuplicateIssues
+    fetchAllIssues,
+    findDuplicateIssuesInCache
 };

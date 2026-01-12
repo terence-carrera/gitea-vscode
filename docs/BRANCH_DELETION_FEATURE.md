@@ -27,7 +27,7 @@ Detects multiple branch deletion patterns:
 - Force deletion (`git branch -D`)
 - Remote branch deletion
 - Update-ref deletions
-- Duplicates are automatically filtered
+- Duplicates automatically filtered
 
 ### 4. Configurable Retention Period
 

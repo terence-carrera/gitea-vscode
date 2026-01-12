@@ -1,0 +1,51 @@
+name: Lint and Test on Pull Request
+
+on:
+    pull_request:
+        branches:
+            - master
+        types:
+            - opened
+            - synchronize
+            - reopened
+
+jobs:
+    test:
+        name: Lint and Test
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [18.x, 20.x, 22.x]
+
+        steps:
+            - name: Checkout Code
+              uses: actions/checkout@v4
+
+            - name: Setup Node.JS ${{ matrix.node-version }}
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: "npm"
+
+            - name: Install Dependencies
+              run: npm ci
+
+            - name: Run ESLint
+              run: npm run lint
+
+            - name: Run Tests
+              run: npm test
+              env:
+                  # Increase memory for tests if needed
+                  NODE_OPTIONS: --max-old-space-size=4096
+
+            - name: Upload Test Results
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-results-node-${{ matrix.node-version }}
+                  path: |
+                      test-results/
+                      coverage/
+                  retention-days: 30

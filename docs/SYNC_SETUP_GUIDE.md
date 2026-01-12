@@ -66,7 +66,7 @@ The Gitea extension automatically marks deletion history for sync. You don't nee
 
 The extension uses VS Code's `globalState.setKeysForSync()` API to mark specific data for synchronization:
 
-```javascript
+```js
 // Extension automatically registers this on activation
 context.globalState.setKeysForSync(['gitea.deletedBranches']);
 ```

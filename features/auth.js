@@ -67,12 +67,11 @@ class GiteaAuth {
         try {
             const user = await this.makeRequest('/api/v1/user');
             if (user && user.login) {
-                vscode.window.showInformationMessage(`Authenticated as ${user.login} on ${this.instanceUrl}`);
                 return true;
             }
             return false;
         } catch (error) {
-            vscode.window.showErrorMessage(`Failed to authenticate with Gitea: ${error.message}`);
+            vscode.window.showErrorMessage(`Failed to Authenticate with Gitea: ${error.message}`);
             return false;
         }
     }
