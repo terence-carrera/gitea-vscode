@@ -115,6 +115,8 @@ Integrate Gitea into VS Code: browse repositories, track issues and pull request
 ### Performance behavior
 
 - GET requests are cached for 10 seconds to reduce duplicate API calls; caches clear automatically when you switch or add profiles.
+- GET requests that return arrays are automatically paginated when the Gitea API provides an `X-Total-Count` response header; the extension will request `?page=1..n` and merge results before returning.
+- For endpoints that support `limit`, include it in the request URL to reduce the number of paginated requests (for example: `...?limit=100`).
 - Refresh commands are throttled to prevent rapid bursts of network requests.
 - Notification polling initializes lazily and starts after a short delay to keep extension activation snappy.
 
