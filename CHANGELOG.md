@@ -10,6 +10,12 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Advanced PR filtering and sorting.
 - Branch rename operations.
 
+## [0.1.7] - 2026-01-17
+
+### Added
+
+- API client: `makeRequest()` now supports automatic pagination for GET list endpoints when the server provides `X-Total-Count`. Thanks [@ale-argo](https://github.com/ale-argo).
+
 ## [0.1.6] - 2026-01-12
 
 ### Added

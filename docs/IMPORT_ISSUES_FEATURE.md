@@ -120,6 +120,10 @@ Common error messages:
 7. **Monitor import progress** - For large imports (50+ issues), check the Output panel for progress logs
 8. **Don't create duplicate issues** - Always review your repository before importing to avoid duplicates
 
+### Large repositories
+
+- The extension supports repositories with more than 100 existing issues by fetching list endpoints across multiple pages when needed. This can make the initial duplicate-check prefetch take longer on very large repositories.
+
 ### Label Matching Behavior
 
 - Label matching is **case-insensitive** (e.g., "Bug" matches "bug")
