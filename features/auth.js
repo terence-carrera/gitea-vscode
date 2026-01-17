@@ -367,8 +367,90 @@ class GiteaAuth {
                 return;
             }
 
-            // Check cache for GET requests (safe to cache)
             const method = options.method || 'GET';
+            // Internal function to handle pagination
+            const fetchAllPages = (endpoint, options, page = 1, accumulated = []) => {
+                // Build endpoint with page parameter if needed
+                let pagedEndpoint = endpoint;
+                if (endpoint.includes('?')) {
+                    pagedEndpoint += `&page=${page}`;
+                } else {
+                    pagedEndpoint += `?page=${page}`;
+                }
+
+                const url = new URL(pagedEndpoint, this.instanceUrl);
+                const protocol = url.protocol === 'https:' ? https : http;
+
+                const requestOptions = {
+                    method: method,
+                    headers: {
+                        'Authorization': `token ${this.authToken}`,
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    }
+                };
+
+                const req = protocol.request(url, requestOptions, (res) => {
+                    let data = '';
+
+                    res.on('data', (chunk) => {
+                        data += chunk;
+                    });
+
+                    res.on('end', () => {
+                        if (res.statusCode >= 200 && res.statusCode < 300) {
+                            let parsed;
+                            try {
+                                parsed = JSON.parse(data);
+                            } catch (e) {
+                                void(e);
+                                resolve(data);
+                                return;
+                            }
+
+                            // Handle pagination only for GET and array data
+                            if (method === 'GET' && Array.isArray(parsed) && res.headers['x-total-count']) {
+                                const total = parseInt(res.headers['x-total-count'], 10);
+                                const currentCount = accumulated.length + parsed.length;
+                                const allData = accumulated.concat(parsed);
+                                if (currentCount < total) {
+                                    // Request next page
+                                    fetchAllPages(endpoint, options, page + 1, allData);
+                                    return;
+                                } else {
+                                    // Cache only if all data has been collected
+                                    const cacheKey = `${this.instanceUrl}${endpoint}`;
+                                    this.cache.set(cacheKey, allData);
+                                    resolve(allData);
+                                    return;
+                                }
+                            } else {
+                                // Cache GET responses (not paginated)
+                                if (method === 'GET') {
+                                    const cacheKey = `${this.instanceUrl}${endpoint}`;
+                                    this.cache.set(cacheKey, parsed);
+                                }
+                                resolve(parsed);
+                                return;
+                            }
+                        } else {
+                            reject(new Error(`API request failed with status ${res.statusCode}: ${data}`));
+                        }
+                    });
+                });
+
+                req.on('error', (error) => {
+                    reject(error);
+                });
+
+                if (options.body) {
+                    req.write(JSON.stringify(options.body));
+                }
+
+                req.end();
+            };
+
+            // Check cache for GET requests (safe to cache)
             if (method === 'GET') {
                 const cacheKey = `${this.instanceUrl}${endpoint}`;
                 const cached = this.cache.get(cacheKey);
@@ -378,54 +460,8 @@ class GiteaAuth {
                 }
             }
 
-            const url = new URL(endpoint, this.instanceUrl);
-            const protocol = url.protocol === 'https:' ? https : http;
-
-            const requestOptions = {
-                method: method,
-                headers: {
-                    'Authorization': `token ${this.authToken}`,
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                }
-            };
-
-            const req = protocol.request(url, requestOptions, (res) => {
-                let data = '';
-
-                res.on('data', (chunk) => {
-                    data += chunk;
-                });
-
-                res.on('end', () => {
-                    if (res.statusCode >= 200 && res.statusCode < 300) {
-                        try {
-                            const parsed = JSON.parse(data);
-                            // Cache GET responses
-                            if (method === 'GET') {
-                                const cacheKey = `${this.instanceUrl}${endpoint}`;
-                                this.cache.set(cacheKey, parsed);
-                            }
-                            resolve(parsed);
-                        } catch (e) {
-                            void(e);
-                            resolve(data);
-                        }
-                    } else {
-                        reject(new Error(`API request failed with status ${res.statusCode}: ${data}`));
-                    }
-                });
-            });
-
-            req.on('error', (error) => {
-                reject(error);
-            });
-
-            if (options.body) {
-                req.write(JSON.stringify(options.body));
-            }
-
-            req.end();
+            // Start the request (with pagination if needed)
+            fetchAllPages(endpoint, options);
         });
     }
 
