@@ -10,6 +10,15 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Advanced PR filtering and sorting.
 - Branch rename operations.
 
+## [0.1.8] - 2026-01-21
+
+### Fixed
+
+- **Issue import duplicate detection**: fixed silent failure when API calls to fetch existing issues fail during duplicate detection.
+  - Error propagation: `fetchAllIssues()` now throws errors instead of returning empty array on failure.
+  - Graceful degradation: import continues but displays warning when duplicate detection fails: `⚠ Duplicate detection failed - issues may have been imported without duplicate checking`.
+  - User notification: users are now informed when duplicate checking couldn't be performed, preventing silent data quality issues.
+
 ## [0.1.7] - 2026-01-17
 
 ### Added
