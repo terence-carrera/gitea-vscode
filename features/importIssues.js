@@ -250,8 +250,8 @@ async function importIssuesInternal(auth, repositoryFullName, issues, options = 
     for (let i = 0; i < issues.length; i++) {
         const issue = issues[i];
         try {
-            // Check for duplicates if option is enabled
-            if (options.checkDuplicates && existingIssuesCache.length > 0) {
+            // Check for duplicates if option is enabled and detection didn't fail
+            if (options.checkDuplicates && !results.duplicateDetectionFailed && existingIssuesCache.length > 0) {
                 const potentialDuplicates = findDuplicateIssuesInCache(
                     issue,
                     existingIssuesCache,
