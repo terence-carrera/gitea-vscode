@@ -150,7 +150,7 @@ async function fetchAllIssues(auth, owner, repo, pageSize = 50) {
         return allIssues;
     } catch (error) {
         console.error('Error fetching all issues:', error);
-        return [];
+        throw new Error(`Failed to fetch existing issues for duplicate detection: ${error.message}`);
     }
 }
 
@@ -214,7 +214,8 @@ async function importIssuesInternal(auth, repositoryFullName, issues, options = 
         successful: [],
         failed: [],
         skipped: 0,
-        duplicates: []
+        duplicates: [],
+        duplicateDetectionFailed: false
     };
 
     // Fetch available labels for label name -> ID mapping
@@ -236,7 +237,14 @@ async function importIssuesInternal(auth, repositoryFullName, issues, options = 
     let existingIssuesCache = [];
     if (options.checkDuplicates) {
         console.log('[DEBUG] Pre-fetching all existing issues for duplicate detection...');
-        existingIssuesCache = await fetchAllIssues(auth, owner, repo);
+        try {
+            existingIssuesCache = await fetchAllIssues(auth, owner, repo);
+        } catch (error) {
+            // Duplicate detection failed - log error and mark as failed
+            console.error('[ERROR] Duplicate detection failed:', error.message);
+            results.duplicateDetectionFailed = true;
+            // Continue with import but without duplicate detection
+        }
     }
 
     for (let i = 0; i < issues.length; i++) {
@@ -607,7 +615,7 @@ async function showImportOptionsDialog(issues) {
  * Show import results summary
  */
 function showImportResults(results) {
-    const { successful, failed, skipped, duplicates } = results;
+    const { successful, failed, skipped, duplicates, duplicateDetectionFailed } = results;
 
     if (successful.length === 0 && failed.length === 0 && (skipped || 0) === 0) {
         vscode.window.showWarningMessage('No issues were imported');
@@ -626,9 +634,13 @@ function showImportResults(results) {
         ? `⊘ Skipped ${skipped} potential duplicate${skipped !== 1 ? 's' : ''}`
         : '';
 
-    const message = [successMsg, failMsg, skipMsg].filter(m => m).join('\n');
+    const warningMsg = duplicateDetectionFailed
+        ? `⚠ Duplicate detection failed - issues may have been imported without duplicate checking`
+        : '';
 
-    if (failed.length > 0 || duplicates.length > 0) {
+    const message = [successMsg, failMsg, skipMsg, warningMsg].filter(m => m).join('\n');
+
+    if (failed.length > 0 || duplicates.length > 0 || duplicateDetectionFailed) {
         const buttons = [];
         if (failed.length > 0) buttons.push('View Failures');
         if (duplicates.length > 0) buttons.push('View Duplicates');
